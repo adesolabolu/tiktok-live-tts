@@ -1,8 +1,20 @@
+import sys
+import os
+
+# PyInstaller --windowed / --noconsole fix:
+# When running with no console on Windows, sys.stdout and sys.stderr are None,
+# which causes uvicorn logging to crash with AttributeError: 'NoneType' object has no attribute 'isatty'.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
+
 import asyncio
 import base64
-import os
 import time
 import uuid
+import threading
+import webbrowser
 import httpx
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -13,7 +25,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent
 
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.0.1"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 
 app = FastAPI(title="TikTok Live TTS Studio", version=CURRENT_VERSION)
@@ -215,7 +227,7 @@ async def cloud_tts_worker():
                 "queue_size": state.tts_queue.qsize()
             })
         except Exception as e:
-            print(f"Cloud TTS error: {e}")
+            pass
         finally:
             state.tts_queue.task_done()
 
@@ -247,7 +259,7 @@ async def api_check_update():
                     "release_url": data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases"),
                     "release_notes": data.get("body", "")
                 }
-    except Exception as e:
+    except Exception:
         pass
     return {
         "has_update": False,
@@ -578,7 +590,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="logo-group">
       <span class="logo-icon">🎙️</span>
       <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.0.0</span>
+      <span class="version-tag" id="app-version">v1.0.1</span>
     </div>
     <div class="header-badges">
       <div id="latency-badge" class="badge latency">
@@ -694,7 +706,6 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     const ws = new WebSocket(`ws://${location.host}/ws`);
 
-    // Check updates from GitHub
     async function checkForUpdates() {
       try {
         const res = await fetch('/api/check-update');
@@ -940,5 +951,11 @@ async def serve_index():
     return HTML_CONTENT
 
 if __name__ == "__main__":
+    def launch_browser():
+        time.sleep(1.2)
+        webbrowser.open("http://127.0.0.1:8080")
+
+    threading.Thread(target=launch_browser, daemon=True).start()
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8080)
+    # log_config=None prevents uvicorn from crashing when sys.stdout is redirected/None in windowed mode
+    uvicorn.run(app, host="127.0.0.1", port=8080, log_config=None)
