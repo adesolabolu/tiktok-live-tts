@@ -33,6 +33,7 @@ jobs:
       - name: Compile to Standalone .exe with PyInstaller
         run: |
           pyinstaller --noconfirm --onedir --windowed --name "TikTokLiveTTS" `
+            --icon "icon.ico" `
             --hidden-import uvicorn `
             --hidden-import uvicorn.config `
             --hidden-import uvicorn.main `
@@ -53,6 +54,8 @@ jobs:
             --hidden-import clr `
             --hidden-import pythonnet `
             --copy-metadata uvicorn `
+            --add-data "icon.ico;." `
+            --add-data "icon.png;." `
             --add-data "app.py;." app.py
 
       - name: Compress Executable into ZIP

@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import multiprocessing
 
 multiprocessing.freeze_support()
@@ -40,10 +41,58 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import edge_tts
 from TikTokLive import TikTokLiveClient
-from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent
+from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.0.3"
+CURRENT_VERSION = "1.1.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
+
+# Determine config and asset file location
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+    BUNDLE_DIR = getattr(sys, '_MEIPASS', BASE_DIR)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BUNDLE_DIR = BASE_DIR
+
+CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+
+DEFAULT_CONFIG = {
+    "username": "",
+    "engine": "instant",
+    "voice": "en-US-AvaNeural",
+    "volume": 1.0,
+    "cooldown": 5,
+    "max_chars": 120,
+    "banned_words": "",
+    "role_filter": "anyone",       # "anyone", "followers", "subs", "fan_club"
+    "min_fan_level": 0,            # 0 = any, or 1, 5, 10...
+    "fan_announcements_enabled": True,
+    "gift_tts_enabled": True,
+    "gift_sound_enabled": True,
+    "gift_min_coins": 1,
+    "spam_auto_mute": True
+}
+
+def load_config() -> dict:
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                cfg = dict(DEFAULT_CONFIG)
+                cfg.update(saved)
+                return cfg
+        except Exception:
+            pass
+    return dict(DEFAULT_CONFIG)
+
+def save_config(cfg: dict):
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception:
+        pass
+
+initial_cfg = load_config()
 
 app = FastAPI(title="TikTok Live TTS Studio", version=CURRENT_VERSION)
 
@@ -56,24 +105,55 @@ app.add_middleware(
 )
 
 class AppState:
-    def __init__(self):
-        self.username: Optional[str] = None
+    def __init__(self, cfg: dict):
+        self.username: str = cfg.get("username", "")
         self.client: Optional[TikTokLiveClient] = None
         self.task: Optional[asyncio.Task] = None
         self.status: str = "disconnected"
         self.status_msg: str = "Ready to connect"
-        self.engine: str = "instant"
-        self.voice: str = "en-US-AvaNeural"
-        self.volume: float = 1.0
-        self.cooldown: int = 5
-        self.max_chars: int = 120
-        self.banned_words: list[str] = []
+        self.engine: str = cfg.get("engine", "instant")
+        self.voice: str = cfg.get("voice", "en-US-AvaNeural")
+        self.volume: float = cfg.get("volume", 1.0)
+        self.cooldown: int = cfg.get("cooldown", 5)
+        self.max_chars: int = cfg.get("max_chars", 120)
+        self.banned_words: list[str] = [w.strip() for w in cfg.get("banned_words", "").split(",") if w.strip()]
+        self.banned_words_raw: str = cfg.get("banned_words", "")
+        
+        # Bundle 1 & Fan Club Controls
+        self.role_filter: str = cfg.get("role_filter", "anyone")
+        self.min_fan_level: int = cfg.get("min_fan_level", 0)
+        self.fan_announcements_enabled: bool = cfg.get("fan_announcements_enabled", True)
+        self.gift_tts_enabled: bool = cfg.get("gift_tts_enabled", True)
+        self.gift_sound_enabled: bool = cfg.get("gift_sound_enabled", True)
+        self.gift_min_coins: int = cfg.get("gift_min_coins", 1)
+        self.spam_auto_mute: bool = cfg.get("spam_auto_mute", True)
+
         self.tts_queue: asyncio.Queue = asyncio.Queue()
         self.user_last_seen: dict[str, float] = {}
+        self.user_msg_history: dict[str, list[float]] = {}
+        self.user_muted_until: dict[str, float] = {}
         self.websockets: set[WebSocket] = set()
         self.current_speaking: Optional[dict] = None
 
-state = AppState()
+    def export_config(self) -> dict:
+        return {
+            "username": self.username,
+            "engine": self.engine,
+            "voice": self.voice,
+            "volume": self.volume,
+            "cooldown": self.cooldown,
+            "max_chars": self.max_chars,
+            "banned_words": self.banned_words_raw,
+            "role_filter": self.role_filter,
+            "min_fan_level": self.min_fan_level,
+            "fan_announcements_enabled": self.fan_announcements_enabled,
+            "gift_tts_enabled": self.gift_tts_enabled,
+            "gift_sound_enabled": self.gift_sound_enabled,
+            "gift_min_coins": self.gift_min_coins,
+            "spam_auto_mute": self.spam_auto_mute
+        }
+
+state = AppState(initial_cfg)
 
 class ConnectRequest(BaseModel):
     username: str
@@ -90,6 +170,13 @@ class SettingsRequest(BaseModel):
     cooldown: Optional[int] = None
     max_chars: Optional[int] = None
     banned_words: Optional[str] = None
+    role_filter: Optional[str] = None
+    min_fan_level: Optional[int] = None
+    fan_announcements_enabled: Optional[bool] = None
+    gift_tts_enabled: Optional[bool] = None
+    gift_sound_enabled: Optional[bool] = None
+    gift_min_coins: Optional[int] = None
+    spam_auto_mute: Optional[bool] = None
 
 async def broadcast(data: dict):
     dead = set()
@@ -100,21 +187,58 @@ async def broadcast(data: dict):
             dead.add(ws)
     state.websockets.difference_update(dead)
 
-def check_filters(user_id: str, text: str) -> tuple[bool, str]:
+def check_filters(user, text: str) -> tuple[bool, str]:
+    now = time.time()
+    user_id = getattr(user, 'unique_id', str(getattr(user, 'id', 'user')))
+    
+    # 1. Spam Auto-Mute Check (3+ messages in 10s = 30s mute)
+    if state.spam_auto_mute:
+        mute_until = state.user_muted_until.get(user_id, 0)
+        if now < mute_until:
+            rem = int(mute_until - now)
+            return False, f"Auto-muted for spam ({rem}s left)"
+            
+        history = state.user_msg_history.setdefault(user_id, [])
+        history = [t for t in history if (now - t) < 10.0]
+        if len(history) >= 3:
+            state.user_muted_until[user_id] = now + 30.0
+            return False, "Auto-muted 30s (rapid spam)"
+        history.append(now)
+        state.user_msg_history[user_id] = history
+
+    # 2. Fan Club & Role Filter Check
+    fan_level = 0
+    if hasattr(user, 'fans_club') and user.fans_club and hasattr(user.fans_club, 'data') and user.fans_club.data:
+        fan_level = getattr(user.fans_club.data, 'level', 0)
+        
+    is_sub = getattr(user, 'is_subscribe', False)
+    is_follower = getattr(user, 'is_follower', False)
+
+    if state.role_filter == "followers" and not is_follower:
+        return False, "Followers only"
+    if state.role_filter == "subs" and not is_sub:
+        return False, "Subscribers only"
+    if state.role_filter == "fan_club" and fan_level < 1:
+        return False, "Fan Club only"
+    if state.min_fan_level > 0 and fan_level < state.min_fan_level:
+        return False, f"Requires Fan Lv.{state.min_fan_level} (Viewer is Lv.{fan_level})"
+
+    # 3. Max length truncate
     clean_text = text.strip()
     if len(clean_text) > state.max_chars:
         clean_text = clean_text[:state.max_chars]
     
+    # 4. Banned words check
     lower_text = clean_text.lower()
     for word in state.banned_words:
         if word and word.lower() in lower_text:
-            return False, f"Contains blacklisted word: {word}"
+            return False, f"Blacklisted word: {word}"
             
-    now = time.time()
+    # 5. Cooldown check
     last = state.user_last_seen.get(user_id, 0)
     if (now - last) < state.cooldown:
         remaining = int(state.cooldown - (now - last))
-        return False, f"Cooldown active ({remaining}s left)"
+        return False, f"Cooldown ({remaining}s)"
         
     state.user_last_seen[user_id] = now
     return True, clean_text
@@ -142,6 +266,8 @@ async def handle_new_tts_item(user: str, raw_text: str, display_text: str):
 async def tiktok_runner(username: str):
     clean_user = username.lstrip("@").strip()
     state.username = clean_user
+    save_config(state.export_config())
+    
     state.status = "connecting"
     state.status_msg = f"Connecting to @{clean_user}..."
     await broadcast({"type": "status", "status": state.status, "message": state.status_msg})
@@ -153,7 +279,7 @@ async def tiktok_runner(username: str):
         is_live = await client.is_live()
         if not is_live:
             state.status = "offline"
-            state.status_msg = f"@{clean_user} is currently offline. Start livestreaming or check the username."
+            state.status_msg = f"@{clean_user} is currently offline. Start streaming or try another username."
             await broadcast({"type": "status", "status": state.status, "message": state.status_msg})
             return
 
@@ -165,10 +291,15 @@ async def tiktok_runner(username: str):
 
         @client.on(CommentEvent)
         async def on_comment(event: CommentEvent):
-            allowed, result = check_filters(event.user.unique_id, event.comment)
+            allowed, result = check_filters(event.user, event.comment)
+            fan_level = 0
+            if hasattr(event.user, 'fans_club') and event.user.fans_club and hasattr(event.user.fans_club, 'data') and event.user.fans_club.data:
+                fan_level = getattr(event.user.fans_club.data, 'level', 0)
+                
             log_item = {
                 "type": "comment",
                 "user": event.user.nickname,
+                "fan_level": fan_level,
                 "text": event.comment,
                 "allowed": allowed,
                 "reason": result if not allowed else "",
@@ -183,19 +314,71 @@ async def tiktok_runner(username: str):
         @client.on(GiftEvent)
         async def on_gift(event: GiftEvent):
             if event.gift.streakable and event.streaking:
-                return
+                return  # Skip rapid intermediate streak numbers
+                
+            coins = getattr(event.gift, 'diamond_count', 0) * event.repeat_count
+            allowed = state.gift_tts_enabled and (coins >= state.gift_min_coins)
+            reason = "" if allowed else ("Gift TTS disabled" if not state.gift_tts_enabled else f"Under {state.gift_min_coins} coins")
+
             log_item = {
                 "type": "gift",
                 "user": event.user.nickname,
-                "text": f"Sent {event.repeat_count}x {event.gift.name}",
-                "allowed": True,
-                "reason": "",
+                "text": f"Sent {event.repeat_count}x {event.gift.name} ({coins} coins)",
+                "allowed": allowed,
+                "reason": reason,
                 "time": time.strftime("%H:%M:%S")
             }
             await broadcast({"type": "chat_log", "data": log_item})
 
-            speech_text = f"Thank you {event.user.nickname} for sending {event.repeat_count} {event.gift.name}!"
-            await handle_new_tts_item(event.user.nickname, speech_text, f"Sent {event.repeat_count}x {event.gift.name}")
+            if state.gift_sound_enabled:
+                await broadcast({"type": "gift_chime"})
+
+            if allowed:
+                speech_text = f"Thank you {event.user.nickname} for sending {event.repeat_count} {event.gift.name}!"
+                await handle_new_tts_item(event.user.nickname, speech_text, f"Sent {event.repeat_count}x {event.gift.name}")
+
+        @client.on(SubNotifyEvent)
+        async def on_sub(event: SubNotifyEvent):
+            user_name = getattr(event.user, 'nickname', 'Subscriber')
+            months = getattr(event, 'sub_month', 1)
+            text = f"Subscribed for {months} month{'s' if months > 1 else ''}!"
+            log_item = {
+                "type": "sub",
+                "user": user_name,
+                "text": text,
+                "allowed": state.fan_announcements_enabled,
+                "reason": "" if state.fan_announcements_enabled else "Announcements disabled",
+                "time": time.strftime("%H:%M:%S")
+            }
+            await broadcast({"type": "chat_log", "data": log_item})
+
+            if state.fan_announcements_enabled:
+                if state.gift_sound_enabled:
+                    await broadcast({"type": "gift_chime"})
+                speech = f"Welcome {user_name} to the subscriber club!" if months <= 1 else f"Thank you {user_name} for resubscribing for {months} months!"
+                await handle_new_tts_item(user_name, speech, text)
+
+        @client.on(SuperFanJoinEvent)
+        async def on_superfan_join(event: SuperFanJoinEvent):
+            user_name = getattr(event.user, 'nickname', 'Fan') if hasattr(event, 'user') and event.user else 'Fan'
+            level = getattr(event, 'fans_level_param', 1) or 1
+            text = f"Joined Fan Club (Level {level})!"
+            log_item = {
+                "type": "fan",
+                "user": user_name,
+                "fan_level": level,
+                "text": text,
+                "allowed": state.fan_announcements_enabled,
+                "reason": "" if state.fan_announcements_enabled else "Announcements disabled",
+                "time": time.strftime("%H:%M:%S")
+            }
+            await broadcast({"type": "chat_log", "data": log_item})
+
+            if state.fan_announcements_enabled:
+                if state.gift_sound_enabled:
+                    await broadcast({"type": "gift_chime"})
+                speech = f"Congratulations {user_name} for joining the fan club at level {level}!"
+                await handle_new_tts_item(user_name, speech, text)
 
         @client.on(DisconnectEvent)
         async def on_disconnect(event: DisconnectEvent):
@@ -242,7 +425,7 @@ async def cloud_tts_worker():
                 "audio_b64": b64_audio,
                 "queue_size": state.tts_queue.qsize()
             })
-        except Exception as e:
+        except Exception:
             pass
         finally:
             state.tts_queue.task_done()
@@ -329,9 +512,9 @@ async def api_clear_queue():
 
 @app.post("/api/settings")
 async def api_settings(req: SettingsRequest):
-    if req.engine:
+    if req.engine is not None:
         state.engine = req.engine
-    if req.voice:
+    if req.voice is not None:
         state.voice = req.voice
     if req.volume is not None:
         state.volume = req.volume
@@ -340,15 +523,28 @@ async def api_settings(req: SettingsRequest):
     if req.max_chars is not None:
         state.max_chars = req.max_chars
     if req.banned_words is not None:
+        state.banned_words_raw = req.banned_words
         state.banned_words = [w.strip() for w in req.banned_words.split(",") if w.strip()]
+    if req.role_filter is not None:
+        state.role_filter = req.role_filter
+    if req.min_fan_level is not None:
+        state.min_fan_level = req.min_fan_level
+    if req.fan_announcements_enabled is not None:
+        state.fan_announcements_enabled = req.fan_announcements_enabled
+    if req.gift_tts_enabled is not None:
+        state.gift_tts_enabled = req.gift_tts_enabled
+    if req.gift_sound_enabled is not None:
+        state.gift_sound_enabled = req.gift_sound_enabled
+    if req.gift_min_coins is not None:
+        state.gift_min_coins = req.gift_min_coins
+    if req.spam_auto_mute is not None:
+        state.spam_auto_mute = req.spam_auto_mute
+
+    save_config(state.export_config())
+
     return {
         "status": "ok",
-        "engine": state.engine,
-        "voice": state.voice,
-        "volume": state.volume,
-        "cooldown": state.cooldown,
-        "max_chars": state.max_chars,
-        "banned_words": state.banned_words
+        "config": state.export_config()
     }
 
 @app.websocket("/ws")
@@ -360,12 +556,7 @@ async def websocket_endpoint(ws: WebSocket):
         "version": CURRENT_VERSION,
         "status": state.status,
         "message": state.status_msg,
-        "username": state.username,
-        "engine": state.engine,
-        "voice": state.voice,
-        "volume": state.volume,
-        "cooldown": state.cooldown,
-        "max_chars": state.max_chars,
+        "config": state.export_config(),
         "queue_size": state.tts_queue.qsize()
     })
     try:
@@ -390,6 +581,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       --accent-primary: #10b981;
       --accent-cyan: #06b6d4;
       --accent-danger: #ef4444;
+      --accent-gold: #f59e0b;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
     }
@@ -405,23 +597,23 @@ HTML_CONTENT = """<!DOCTYPE html>
     header {
       background: #0f172a;
       border-bottom: 1px solid var(--card-border);
-      padding: 16px 28px;
+      padding: 14px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
     .logo-group { display: flex; align-items: center; gap: 12px; }
-    .logo-icon { font-size: 26px; }
-    .logo-title { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    .logo-icon { font-size: 24px; }
+    .logo-title { font-size: 19px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
     .version-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #1e293b; color: #94a3b8; font-weight: 600; margin-left: 6px; }
     .header-badges { display: flex; gap: 10px; align-items: center; }
     .badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 14px;
+      padding: 5px 12px;
       border-radius: 999px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       background: #1e293b;
       color: var(--text-muted);
@@ -436,7 +628,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       display: none;
       background: linear-gradient(90deg, #1e3a8a, #0284c7);
       color: #fff;
-      padding: 10px 24px;
+      padding: 9px 24px;
       font-size: 13px;
       font-weight: 600;
       text-align: center;
@@ -447,61 +639,61 @@ HTML_CONTENT = """<!DOCTYPE html>
     #update-banner a {
       color: #38bdf8;
       background: rgba(255, 255, 255, 0.15);
-      padding: 4px 12px;
-      border-radius: 6px;
+      padding: 3px 10px;
+      border-radius: 5px;
       text-decoration: none;
       font-weight: 700;
     }
 
     .main-container {
       display: grid;
-      grid-template-columns: 400px 1fr;
-      gap: 24px;
-      padding: 24px 28px;
+      grid-template-columns: 440px 1fr;
+      gap: 20px;
+      padding: 20px 28px;
       flex: 1;
-      max-width: 1400px;
+      max-width: 1500px;
       margin: 0 auto;
       width: 100%;
     }
     .card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 20px;
-      margin-bottom: 20px;
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
     }
     .card-title {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       color: var(--accent-cyan);
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
     input[type="text"], input[type="number"], select {
       width: 100%;
       background: #090d16;
       border: 1px solid #2d3748;
-      border-radius: 8px;
-      padding: 10px 14px;
+      border-radius: 7px;
+      padding: 9px 12px;
       color: #fff;
-      font-size: 14px;
+      font-size: 13px;
       outline: none;
       transition: border 0.2s;
     }
     input[type="text"]:focus, select:focus { border-color: var(--accent-primary); }
-    .btn-row { display: flex; gap: 10px; margin-top: 12px; }
+    .btn-row { display: flex; gap: 8px; margin-top: 10px; }
     button {
       flex: 1;
-      padding: 10px 16px;
-      border-radius: 8px;
+      padding: 9px 14px;
+      border-radius: 7px;
       border: none;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
       transition: all 0.2s;
     }
@@ -512,20 +704,21 @@ HTML_CONTENT = """<!DOCTYPE html>
     .btn-secondary { background: #1e293b; color: #fff; }
     .btn-secondary:hover { background: #334155; }
 
+    /* Engine Toggle */
     .engine-toggle {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 6px;
       background: #090d16;
       padding: 4px;
-      border-radius: 10px;
+      border-radius: 8px;
       border: 1px solid #2d3748;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     .engine-option {
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 13px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 12px;
       font-weight: 600;
       text-align: center;
       cursor: pointer;
@@ -535,9 +728,49 @@ HTML_CONTENT = """<!DOCTYPE html>
     .engine-option.active {
       background: var(--accent-primary);
       color: #000;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
     }
 
+    /* Preset Chips */
+    .preset-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0;
+    }
+    .chip {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #f1f5f9;
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .chip:hover {
+      background: var(--accent-cyan);
+      color: #000;
+      border-color: var(--accent-cyan);
+    }
+
+    /* Checkbox rows */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .toggle-row label { margin-bottom: 0; cursor: pointer; }
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent-primary);
+      cursor: pointer;
+    }
+
+    /* Now Speaking Card */
     .now-speaking-card {
       background: linear-gradient(135deg, #131b2e 0%, #172554 100%);
       border: 1px solid #1e3a8a;
@@ -548,39 +781,67 @@ HTML_CONTENT = """<!DOCTYPE html>
       flex-direction: column;
       justify-content: center;
       background: rgba(0, 0, 0, 0.35);
-      border-radius: 10px;
-      padding: 14px 18px;
-      margin-bottom: 12px;
+      border-radius: 9px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
     }
-    .speaking-user { font-size: 14px; font-weight: 700; color: #38bdf8; margin-bottom: 4px; }
-    .speaking-text { font-size: 18px; font-weight: 500; color: #fff; line-height: 1.4; }
-    .speaking-idle { color: var(--text-muted); font-style: italic; font-size: 14px; }
+    .speaking-user { font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 3px; }
+    .speaking-text { font-size: 17px; font-weight: 500; color: #fff; line-height: 1.4; }
+    .speaking-idle { color: var(--text-muted); font-style: italic; font-size: 13px; }
 
+    /* Live activity log */
     .log-container {
       background: #090d16;
       border: 1px solid #1e293b;
-      border-radius: 10px;
-      height: 480px;
+      border-radius: 9px;
+      height: 520px;
       overflow-y: auto;
-      padding: 12px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
     .log-item {
-      padding: 8px 12px;
+      padding: 7px 11px;
       border-radius: 6px;
       background: #111827;
-      font-size: 13px;
+      font-size: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    .log-item.gift { border-left: 3px solid #f59e0b; background: rgba(245, 158, 11, 0.08); }
-    .log-item.blocked { opacity: 0.5; border-left: 3px solid var(--accent-danger); }
-    .log-user { font-weight: 600; color: #38bdf8; margin-right: 8px; }
+    .log-item.gift { border-left: 3px solid var(--accent-gold); background: rgba(245, 158, 11, 0.08); }
+    .log-item.sub { border-left: 3px solid #a855f7; background: rgba(168, 85, 247, 0.08); }
+    .log-item.fan { border-left: 3px solid #f59e0b; background: rgba(245, 158, 11, 0.12); }
+    .log-item.blocked { opacity: 0.55; border-left: 3px solid var(--accent-danger); }
+    .badge-fan {
+      display: inline-block;
+      background: #f59e0b;
+      color: #000;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 4px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .log-user { font-weight: 600; color: #38bdf8; margin-right: 6px; }
     .log-text { color: #f1f5f9; }
-    .log-time { font-size: 11px; color: #64748b; margin-left: 12px; white-space: nowrap; }
+    .log-time { font-size: 11px; color: #64748b; margin-left: 10px; white-space: nowrap; }
+
+    /* Footer Legal Disclaimer */
+    footer {
+      background: #090d16;
+      border-top: 1px solid var(--card-border);
+      padding: 10px 28px;
+      font-size: 11px;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    footer a { color: #94a3b8; text-decoration: none; }
+    footer a:hover { color: #fff; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -593,7 +854,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="logo-group">
       <span class="logo-icon">🎙️</span>
       <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.0.3</span>
+      <span class="version-tag" id="app-version">v1.1.0</span>
     </div>
     <div class="header-badges">
       <div id="latency-badge" class="badge latency">
@@ -607,20 +868,23 @@ HTML_CONTENT = """<!DOCTYPE html>
   </header>
 
   <div class="main-container">
+    <!-- Left Column: Settings & Controls -->
     <div>
+      <!-- 1. Connection Card -->
       <div class="card">
         <div class="card-title">Stream Connection</div>
-        <label>TikTok @Username</label>
+        <label>TikTok @Username (Auto-Saved)</label>
         <input type="text" id="username-input" placeholder="e.g. your_username" />
         <div class="btn-row">
           <button class="btn-primary" onclick="connectStream()">Connect</button>
           <button class="btn-secondary" onclick="disconnectStream()">Disconnect</button>
         </div>
-        <p id="status-msg" style="font-size: 12px; color: var(--text-muted); margin-top: 10px;"></p>
+        <p id="status-msg" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></p>
       </div>
 
+      <!-- 2. Voice Engine Card -->
       <div class="card">
-        <div class="card-title">Voice Engine Mode</div>
+        <div class="card-title">Voice & Audio Engine</div>
         <div class="engine-toggle">
           <div id="opt-instant" class="engine-option active" onclick="setEngine('instant')">
             ⚡ Instant Native (&lt;50ms)
@@ -633,7 +897,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div id="instant-voice-block">
           <label>Native OS Voice</label>
           <select id="browser-voice-select"></select>
-          <p style="font-size: 11px; color: #34d399; margin-top: 6px;">Zero network delay. Speaks instantly the millisecond chat sends a comment.</p>
+          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">Zero delay. Speaks instantaneously when viewer chats.</p>
         </div>
 
         <div id="cloud-voice-block" style="display: none;">
@@ -646,34 +910,91 @@ HTML_CONTENT = """<!DOCTYPE html>
             <option value="en-US-BrianNeural">Brian (US Male - Deep/Radio)</option>
             <option value="en-US-EmmaNeural">Emma (US Female - Cheerful)</option>
           </select>
-          <p style="font-size: 11px; color: #f59e0b; margin-top: 6px;">High fidelity, but requires ~3-5s network buffering per sentence.</p>
+          <p style="font-size: 11px; color: #f59e0b; margin-top: 5px;">High fidelity, requires ~3-5s network buffering per message.</p>
         </div>
 
-        <div style="margin-top: 14px;">
+        <div style="margin-top: 12px;">
           <label>Volume: <span id="vol-label">100%</span></label>
           <input type="range" id="vol-slider" min="0" max="1" step="0.05" value="1" style="width: 100%;" oninput="changeVolume(this.value)" />
         </div>
       </div>
 
+      <!-- 3. Fan Club & Audience Permissions (User Feature) -->
+      <div class="card">
+        <div class="card-title">Audience & Fan Club Access</div>
+        <label>Who Can Trigger Text-to-Speech?</label>
+        <select id="role-filter" onchange="updateSettings()" style="margin-bottom: 12px;">
+          <option value="anyone">Everyone (Open to all chat)</option>
+          <option value="followers">Followers Only</option>
+          <option value="fan_club">Fan Club Members Only (Closes TTS for non-members)</option>
+          <option value="subs">Subscribers Only</option>
+        </select>
+
+        <label>Minimum Fan Club Level to Speak (0 = Any Level)</label>
+        <input type="number" id="min-fan-level" min="0" max="50" value="0" onchange="updateSettings()" style="margin-bottom: 6px;" />
+        <p style="font-size: 11px; color: var(--text-muted);">Set to e.g. <b>5</b> to close TTS for viewers below Level 5 or not in the fan club.</p>
+
+        <div class="toggle-row" style="margin-top: 10px;">
+          <label for="fan-announce-toggle">Announce New Fans & Subs (TTS + Chime)</label>
+          <input type="checkbox" id="fan-announce-toggle" checked onchange="updateSettings()" />
+        </div>
+      </div>
+
+      <!-- 4. Gift Controls & Milestones -->
+      <div class="card">
+        <div class="card-title">Gift Callouts & Sound Alerts</div>
+        <div class="toggle-row">
+          <label for="gift-tts-toggle">Speak Gift Announcements</label>
+          <input type="checkbox" id="gift-tts-toggle" checked onchange="updateSettings()" />
+        </div>
+        <div class="toggle-row">
+          <label for="gift-sound-toggle">Play Gift Alert Chime Sound</label>
+          <input type="checkbox" id="gift-sound-toggle" checked onchange="updateSettings()" />
+        </div>
+        <label style="margin-top: 8px;">Minimum Gift Coins for Speech</label>
+        <input type="number" id="gift-min-coins" min="1" max="10000" value="1" onchange="updateSettings()" />
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Ignore cheap 1-coin spam and only speak bigger gifts.</p>
+      </div>
+
+      <!-- 5. Anti-Spam & Moderation -->
       <div class="card">
         <div class="card-title">Safety & Anti-Troll</div>
-        <label>Per-User Cooldown (seconds)</label>
-        <input type="number" id="cooldown-input" value="5" min="1" max="60" onchange="updateSettings()" style="margin-bottom: 12px;" />
+        <div class="toggle-row">
+          <label for="spam-automute-toggle">Auto-Mute Rapid Spammers (3 msgs / 10s)</label>
+          <input type="checkbox" id="spam-automute-toggle" checked onchange="updateSettings()" />
+        </div>
 
-        <label>Max Text Length (characters)</label>
-        <input type="number" id="maxlen-input" value="120" min="20" max="300" onchange="updateSettings()" style="margin-bottom: 12px;" />
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+          <div>
+            <label>Cooldown (sec)</label>
+            <input type="number" id="cooldown-input" value="5" min="1" max="60" onchange="updateSettings()" />
+          </div>
+          <div>
+            <label>Max Characters</label>
+            <input type="number" id="maxlen-input" value="120" min="20" max="300" onchange="updateSettings()" />
+          </div>
+        </div>
 
-        <label>Banned Words (comma separated)</label>
+        <label style="margin-top: 10px;">Banned Words (comma separated)</label>
         <input type="text" id="banned-input" placeholder="badword1, troll2" onchange="updateSettings()" />
       </div>
 
+      <!-- 6. Test Audio Sandbox with Presets -->
       <div class="card">
         <div class="card-title">Test Audio Sandbox</div>
-        <input type="text" id="test-text" placeholder="Type a phrase to test live speech..." />
-        <button class="btn-primary" style="margin-top: 10px; width: 100%;" onclick="sendTestSpeech()">Speak Test Message</button>
+        <div class="preset-chips">
+          <span class="chip" onclick="applyPreset('Welcome to the livestream everyone!')">👋 Welcome</span>
+          <span class="chip" onclick="applyPreset('Thank you for the roses and gifts!')">🌹 Thanks for Gift</span>
+          <span class="chip" onclick="applyPreset('Let\'s go! Hype in the chat!')">🔥 Hype</span>
+          <span class="chip" onclick="applyPreset('GG on that round! Intense match.')">🎮 GG Match</span>
+          <span class="chip" onclick="applyPreset('Shoutout to the top gifter on the leaderboard!')">👑 Leaderboard</span>
+        </div>
+        <input type="text" id="test-text" placeholder="Type or click a preset above..." />
+        <button class="btn-primary" style="margin-top: 8px; width: 100%;" onclick="sendTestSpeech()">Speak Test Message</button>
       </div>
     </div>
 
+    <!-- Right Column: Speaking Monitor & Live Chat -->
     <div>
       <div class="card now-speaking-card">
         <div class="card-title">
@@ -691,13 +1012,21 @@ HTML_CONTENT = """<!DOCTYPE html>
       </div>
 
       <div class="card">
-        <div class="card-title">Live Chat & Gift Activity</div>
+        <div class="card-title">
+          <span>Live Chat & Gift Activity</span>
+          <span style="font-size: 11px; font-weight: normal; color: #64748b;">Filtered messages show with red tag</span>
+        </div>
         <div id="log-list" class="log-container">
           <div style="color: #64748b; text-align: center; margin-top: 40px;">Live comments and gifts will stream here when connected...</div>
         </div>
       </div>
     </div>
   </div>
+
+  <footer>
+    <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers are responsible for broadcast content.</span>
+    <a href="https://github.com/adesolabolu/tiktok-live-tts" target="_blank">GitHub Repository</a>
+  </footer>
 
   <script>
     let currentEngine = "instant";
@@ -706,6 +1035,29 @@ HTML_CONTENT = """<!DOCTYPE html>
     let isPlaying = false;
     let activeAudio = null;
     let browserVoices = [];
+
+    // Synthesized pleasant Web Audio gift chime
+    function playGiftChime() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, now);          // A5
+        osc.frequency.exponentialRampToValueAtTime(1320, now + 0.12); // E6
+
+        gain.gain.setValueAtTime(currentVolume * 0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.36);
+      } catch (e) {}
+    }
 
     const ws = new WebSocket(`ws://${location.host}/ws`);
 
@@ -765,10 +1117,25 @@ HTML_CONTENT = """<!DOCTYPE html>
       if (data.type === 'init') {
         updateStatus(data.status, data.message);
         if (data.version) document.getElementById('app-version').textContent = 'v' + data.version;
-        if (data.username) document.getElementById('username-input').value = data.username;
-        if (data.engine) setEngine(data.engine);
-        if (data.cooldown) document.getElementById('cooldown-input').value = data.cooldown;
-        if (data.max_chars) document.getElementById('maxlen-input').value = data.max_chars;
+        const cfg = data.config || {};
+        if (cfg.username) document.getElementById('username-input').value = cfg.username;
+        if (cfg.engine) setEngine(cfg.engine);
+        if (cfg.voice) document.getElementById('cloud-voice-select').value = cfg.voice;
+        if (cfg.volume !== undefined) {
+          document.getElementById('vol-slider').value = cfg.volume;
+          changeVolume(cfg.volume);
+        }
+        if (cfg.cooldown) document.getElementById('cooldown-input').value = cfg.cooldown;
+        if (cfg.max_chars) document.getElementById('maxlen-input').value = cfg.max_chars;
+        if (cfg.banned_words) document.getElementById('banned-input').value = cfg.banned_words;
+        if (cfg.role_filter) document.getElementById('role-filter').value = cfg.role_filter;
+        if (cfg.min_fan_level !== undefined) document.getElementById('min-fan-level').value = cfg.min_fan_level;
+        if (cfg.fan_announcements_enabled !== undefined) document.getElementById('fan-announce-toggle').checked = cfg.fan_announcements_enabled;
+        if (cfg.gift_tts_enabled !== undefined) document.getElementById('gift-tts-toggle').checked = cfg.gift_tts_enabled;
+        if (cfg.gift_sound_enabled !== undefined) document.getElementById('gift-sound-toggle').checked = cfg.gift_sound_enabled;
+        if (cfg.gift_min_coins !== undefined) document.getElementById('gift-min-coins').value = cfg.gift_min_coins;
+        if (cfg.spam_auto_mute !== undefined) document.getElementById('spam-automute-toggle').checked = cfg.spam_auto_mute;
+
         updateQueue(data.queue_size || 0);
         checkForUpdates();
       } else if (data.type === 'status') {
@@ -777,6 +1144,8 @@ HTML_CONTENT = """<!DOCTYPE html>
         updateQueue(data.size);
       } else if (data.type === 'chat_log') {
         addLogItem(data.data);
+      } else if (data.type === 'gift_chime') {
+        playGiftChime();
       } else if (data.type === 'tts_instant') {
         speakInstant(data.item);
       } else if (data.type === 'tts_audio') {
@@ -868,9 +1237,18 @@ HTML_CONTENT = """<!DOCTYPE html>
         list.innerHTML = '';
       }
       const div = document.createElement('div');
-      div.className = 'log-item ' + (item.type === 'gift' ? 'gift' : '') + (item.allowed === false ? ' blocked' : '');
+      let extraClass = '';
+      if (item.type === 'gift') extraClass = 'gift';
+      else if (item.type === 'sub') extraClass = 'sub';
+      else if (item.type === 'fan') extraClass = 'fan';
+      if (item.allowed === false) extraClass += ' blocked';
+      div.className = 'log-item ' + extraClass;
+      
+      const fanBadge = (item.fan_level && item.fan_level > 0) ? `<span class="badge-fan">LV.${item.fan_level}</span>` : '';
+
       div.innerHTML = `
         <div>
+          ${fanBadge}
           <span class="log-user">${item.user}</span>
           <span class="log-text">${item.text} ${item.reason ? '<span style="color:#f87171;">(' + item.reason + ')</span>' : ''}</span>
         </div>
@@ -884,6 +1262,11 @@ HTML_CONTENT = """<!DOCTYPE html>
       currentVolume = parseFloat(val);
       document.getElementById('vol-label').textContent = Math.round(currentVolume * 100) + '%';
       if (activeAudio) activeAudio.volume = currentVolume;
+    }
+
+    function applyPreset(text) {
+      document.getElementById('test-text').value = text;
+      sendTestSpeech();
     }
 
     async function connectStream() {
@@ -921,9 +1304,17 @@ HTML_CONTENT = """<!DOCTYPE html>
       const payload = {
         engine: currentEngine,
         voice: document.getElementById('cloud-voice-select').value,
+        volume: currentVolume,
         cooldown: parseInt(document.getElementById('cooldown-input').value) || 5,
         max_chars: parseInt(document.getElementById('maxlen-input').value) || 120,
-        banned_words: document.getElementById('banned-input').value
+        banned_words: document.getElementById('banned-input').value,
+        role_filter: document.getElementById('role-filter').value,
+        min_fan_level: parseInt(document.getElementById('min-fan-level').value) || 0,
+        fan_announcements_enabled: document.getElementById('fan-announce-toggle').checked,
+        gift_tts_enabled: document.getElementById('gift-tts-toggle').checked,
+        gift_sound_enabled: document.getElementById('gift-sound-toggle').checked,
+        gift_min_coins: parseInt(document.getElementById('gift-min-coins').value) || 1,
+        spam_auto_mute: document.getElementById('spam-automute-toggle').checked
       };
       await fetch('/api/settings', {
         method: 'POST',
@@ -950,7 +1341,6 @@ def find_available_port(preferred=8080):
 if __name__ == "__main__":
     active_port = find_available_port(8080)
 
-    # Run the uvicorn server in a background thread
     def run_server():
         config = uvicorn.Config(
             app=app,
@@ -970,20 +1360,20 @@ if __name__ == "__main__":
     time.sleep(1.0)
 
     try:
-        # Launch standalone native desktop application window using Edge WebView2
         import webview
+        icon_file = os.path.join(BUNDLE_DIR, "icon.ico")
+        if not os.path.exists(icon_file):
+            icon_file = os.path.join(BASE_DIR, "icon.ico")
         window = webview.create_window(
             title="TikTok Live TTS Studio",
             url=f"http://127.0.0.1:{active_port}",
-            width=1280,
-            height=820,
-            min_size=(900, 600)
+            width=1320,
+            height=860,
+            min_size=(950, 640)
         )
         webview.start()
     except Exception:
-        # Fallback to browser if webview fails
         import webbrowser
         webbrowser.open(f"http://127.0.0.1:{active_port}")
-        # Keep main thread alive
         while True:
             time.sleep(1)
