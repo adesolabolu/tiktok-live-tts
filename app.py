@@ -1,18 +1,52 @@
 import sys
 import os
+import traceback
+import ctypes
 
-# PyInstaller --windowed / --noconsole fix:
-# When running with no console on Windows, sys.stdout and sys.stderr are None,
-# which causes uvicorn logging to crash with AttributeError: 'NoneType' object has no attribute 'isatty'.
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
+# Windows MessageBox for fatal crash alerts in GUI mode
+def alert_error(title, message):
+    try:
+        ctypes.windll.user32.MessageBoxW(0, str(message), str(title), 0x10)
+    except Exception:
+        pass
+
+# Setup logging file for debug
+debug_log_path = os.path.join(os.path.expanduser("~"), "tiktok_tts_debug.log")
+try:
+    log_fp = open(debug_log_path, "a", encoding="utf-8")
+    if sys.stdout is None:
+        sys.stdout = log_fp
+    if sys.stderr is None:
+        sys.stderr = log_fp
+except Exception:
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
+# Explicit PyInstaller dynamic imports for Uvicorn
+import uvicorn
+import uvicorn.config
+import uvicorn.main
+import uvicorn.logging
+import uvicorn.loops
+import uvicorn.loops.auto
+import uvicorn.protocols
+import uvicorn.protocols.http
+import uvicorn.protocols.http.auto
+import uvicorn.protocols.http.h11_impl
+import uvicorn.protocols.websockets
+import uvicorn.protocols.websockets.auto
+import uvicorn.protocols.websockets.websockets_impl
+import uvicorn.lifespan
+import uvicorn.lifespan.on
+import uvicorn.lifespan.off
 
 import asyncio
 import base64
 import time
 import uuid
+import socket
 import threading
 import webbrowser
 import httpx
@@ -25,7 +59,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent
 
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "1.0.2"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 
 app = FastAPI(title="TikTok Live TTS Studio", version=CURRENT_VERSION)
@@ -45,7 +79,7 @@ class AppState:
         self.task: Optional[asyncio.Task] = None
         self.status: str = "disconnected"
         self.status_msg: str = "Ready to connect"
-        self.engine: str = "instant"  # "instant" (0ms native) or "cloud" (Edge-TTS)
+        self.engine: str = "instant"
         self.voice: str = "en-US-AvaNeural"
         self.volume: float = 1.0
         self.cooldown: int = 5
@@ -55,7 +89,6 @@ class AppState:
         self.user_last_seen: dict[str, float] = {}
         self.websockets: set[WebSocket] = set()
         self.current_speaking: Optional[dict] = None
-        self.latest_release_info: Optional[dict] = None
 
 state = AppState()
 
@@ -590,7 +623,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="logo-group">
       <span class="logo-icon">🎙️</span>
       <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.0.1</span>
+      <span class="version-tag" id="app-version">v1.0.2</span>
     </div>
     <div class="header-badges">
       <div id="latency-badge" class="badge latency">
@@ -950,12 +983,35 @@ HTML_CONTENT = """<!DOCTYPE html>
 async def serve_index():
     return HTML_CONTENT
 
-if __name__ == "__main__":
-    def launch_browser():
-        time.sleep(1.2)
-        webbrowser.open("http://127.0.0.1:8080")
+def find_available_port(preferred=8080):
+    for p in range(preferred, preferred + 20):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('127.0.0.1', p)) != 0:
+                return p
+    return preferred
 
-    threading.Thread(target=launch_browser, daemon=True).start()
-    import uvicorn
-    # log_config=None prevents uvicorn from crashing when sys.stdout is redirected/None in windowed mode
-    uvicorn.run(app, host="127.0.0.1", port=8080, log_config=None)
+if __name__ == "__main__":
+    try:
+        active_port = find_available_port(8080)
+
+        def launch_browser():
+            time.sleep(1.2)
+            webbrowser.open(f"http://127.0.0.1:{active_port}")
+
+        threading.Thread(target=launch_browser, daemon=True).start()
+
+        # Run uvicorn server with explicit configuration
+        config = uvicorn.Config(
+            app=app,
+            host="127.0.0.1",
+            port=active_port,
+            log_config=None,
+            loop="asyncio",
+            http="h11",
+            ws="websockets"
+        )
+        server = uvicorn.Server(config)
+        server.run()
+    except Exception as e:
+        err_msg = traceback.format_exc()
+        alert_error("TikTok Live TTS Startup Error", err_msg)
