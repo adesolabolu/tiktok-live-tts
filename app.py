@@ -48,7 +48,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.3.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 active_port: int = 8080
 
@@ -253,10 +253,11 @@ def check_filters(user, text: str) -> tuple[bool, str]:
     state.user_last_seen[user_id] = now
     return True, clean_text
 
-async def handle_new_tts_item(user: str, raw_text: str, display_text: str):
+async def handle_new_tts_item(user: str, raw_text: str, display_text: str, fan_level: int = 0):
     item = {
         "id": str(uuid.uuid4()),
         "user": user,
+        "fan_level": fan_level,
         "text": raw_text,
         "display": display_text,
         "engine": state.engine,
@@ -319,7 +320,7 @@ async def tiktok_runner(username: str):
 
             if allowed:
                 speech_text = f"{event.user.nickname} says: {result}"
-                await handle_new_tts_item(event.user.nickname, speech_text, event.comment)
+                await handle_new_tts_item(event.user.nickname, speech_text, event.comment, fan_level=fan_level)
 
         @client.on(GiftEvent)
         async def on_gift(event: GiftEvent):
@@ -366,7 +367,7 @@ async def tiktok_runner(username: str):
                 if state.gift_sound_enabled:
                     await broadcast({"type": "gift_chime"})
                 speech = f"Welcome {user_name} to the subscriber club!" if months <= 1 else f"Thank you {user_name} for resubscribing for {months} months!"
-                await handle_new_tts_item(user_name, speech, text)
+                await handle_new_tts_item(user_name, speech, text, fan_level=1)
 
         @client.on(SuperFanJoinEvent)
         async def on_superfan_join(event: SuperFanJoinEvent):
@@ -388,7 +389,7 @@ async def tiktok_runner(username: str):
                 if state.gift_sound_enabled:
                     await broadcast({"type": "gift_chime"})
                 speech = f"Congratulations {user_name} for joining the fan club at level {level}!"
-                await handle_new_tts_item(user_name, speech, text)
+                await handle_new_tts_item(user_name, speech, text, fan_level=level)
 
         @client.on(DisconnectEvent)
         async def on_disconnect(event: DisconnectEvent):
@@ -952,8 +953,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="logo-group">
       <span class="logo-icon">🎙️</span>
       <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.2.0</span>
-      <button class="btn-secondary" style="font-size: 11px; padding: 3px 9px; margin-left: 8px; border-radius: 6px;" onclick="openInBrowser()">🌐 Open in Chrome</button>
+      <span class="version-tag" id="app-version">v1.3.0</span>
     </div>
     <div class="header-badges">
       <div id="latency-badge" class="badge latency">
@@ -996,7 +996,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div id="instant-voice-block">
           <label>Native Browser / OS Voice</label>
           <select id="browser-voice-select"></select>
-          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). <i>Tip: Click "Open in Chrome" in header for 20+ Google voices!</i></p>
+          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
         </div>
 
         <div id="cloud-voice-block" style="display: none;">
@@ -1103,6 +1103,21 @@ HTML_CONTENT = """<!DOCTYPE html>
         <input type="text" id="test-text" placeholder="Type or click a preset above..." />
         <button class="btn-primary" style="margin-top: 8px; width: 100%;" onclick="sendTestSpeech()">Speak Test Message</button>
       </div>
+
+      <!-- 7. OBS & Live Studio Overlay Card -->
+      <div class="card" style="border: 1px solid #0284c7; background: linear-gradient(135deg, #0b1329 0%, #075985 100%);">
+        <div class="card-title" style="color: #38bdf8; margin-bottom: 6px;">
+          <span>📺 Transparent OBS & Live Studio Overlay</span>
+        </div>
+        <p style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px; line-height: 1.3;">
+          Add floating live subtitles & gift alerts onto your stream. Add as a <b>Browser Source</b> in OBS or TikTok Live Studio (Width: 850, Height: 250).
+        </p>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="overlay-url" readonly style="background: rgba(0,0,0,0.5); font-family: monospace; font-size: 11px; color: #38bdf8;" />
+          <button class="btn-primary" style="flex: 0 0 110px; font-size: 11px; padding: 6px 10px;" onclick="copyOverlayUrl()">📋 Copy URL</button>
+          <button class="btn-secondary" style="flex: 0 0 80px; font-size: 11px; padding: 6px 10px;" onclick="previewOverlay()">👁️ Preview</button>
+        </div>
+      </div>
     </div>
 
     <!-- Right Column: Speaking Monitor & Live Chat -->
@@ -1123,9 +1138,14 @@ HTML_CONTENT = """<!DOCTYPE html>
       </div>
 
       <div class="card">
-        <div class="card-title">
+        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
           <span>Live Chat & Gift Activity</span>
-          <span style="font-size: 11px; font-weight: normal; color: #64748b;">Filtered messages show with red tag</span>
+          <div style="display: flex; gap: 5px;">
+            <button class="chip" id="flt-all" style="background: var(--accent-cyan); color: #000;" onclick="filterLog('all')">All</button>
+            <button class="chip" id="flt-spoken" onclick="filterLog('spoken')">🗣️ Spoken</button>
+            <button class="chip" id="flt-gifts" onclick="filterLog('gifts')">🎁 Gifts</button>
+            <button class="chip" id="flt-blocked" onclick="filterLog('blocked')">🚫 Filtered</button>
+          </div>
         </div>
         <div id="log-list" class="log-container">
           <div style="color: #64748b; text-align: center; margin-top: 40px;">Live comments and gifts will stream here when connected...</div>
@@ -1402,6 +1422,9 @@ HTML_CONTENT = """<!DOCTYPE html>
         </div>
         <span class="log-time">${item.time}</span>
       `;
+      if (currentLogFilter === 'spoken' && (item.allowed === false || item.type === 'gift')) div.style.display = 'none';
+      if (currentLogFilter === 'gifts' && item.type !== 'gift') div.style.display = 'none';
+      if (currentLogFilter === 'blocked' && item.allowed !== false) div.style.display = 'none';
       list.prepend(div);
       if (list.children.length > 100) list.lastChild.remove();
     }
@@ -1454,6 +1477,45 @@ HTML_CONTENT = """<!DOCTYPE html>
       updateSettings();
     };
 
+    let currentLogFilter = 'all';
+    function filterLog(type) {
+      currentLogFilter = type;
+      ['all', 'spoken', 'gifts', 'blocked'].forEach(t => {
+        const btn = document.getElementById('flt-' + t);
+        if (btn) {
+          if (t === type) {
+            btn.style.background = 'var(--accent-cyan)';
+            btn.style.color = '#000';
+          } else {
+            btn.style.background = '#1e293b';
+            btn.style.color = '#f1f5f9';
+          }
+        }
+      });
+      const items = document.querySelectorAll('.log-item');
+      items.forEach(el => {
+        if (type === 'all') el.style.display = 'flex';
+        else if (type === 'spoken') el.style.display = (!el.classList.contains('blocked') && !el.classList.contains('gift')) ? 'flex' : 'none';
+        else if (type === 'gifts') el.style.display = el.classList.contains('gift') ? 'flex' : 'none';
+        else if (type === 'blocked') el.style.display = el.classList.contains('blocked') ? 'flex' : 'none';
+      });
+    }
+
+    function copyOverlayUrl() {
+      const url = document.getElementById('overlay-url').value;
+      navigator.clipboard.writeText(url);
+      alert("Overlay URL copied to clipboard!\n\nAdd as a 'Browser Source' in OBS Studio or TikTok Live Studio with Width: 850, Height: 250.");
+    }
+
+    function previewOverlay() {
+      window.open('/overlay', '_blank', 'width=900,height=300');
+    }
+
+    setTimeout(() => {
+      const ovEl = document.getElementById('overlay-url');
+      if (ovEl) ovEl.value = `http://${location.host}/overlay`;
+    }, 200);
+
     async function updateSettings() {
       const nativeSelect = document.getElementById('browser-voice-select');
       const selectedNativeVoice = (browserVoices[nativeSelect.value] ? browserVoices[nativeSelect.value].name : savedNativeVoice);
@@ -1487,6 +1549,198 @@ HTML_CONTENT = """<!DOCTYPE html>
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     return HTML_CONTENT
+
+OVERLAY_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TikTok Live TTS Overlay</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: transparent;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      height: 100vh;
+      padding: 24px;
+    }
+    #subtitle-card {
+      opacity: 0;
+      transform: translateY(20px) scale(0.96);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 16px;
+      padding: 16px 24px;
+      max-width: 850px;
+      width: 90%;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.15);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    #subtitle-card.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .user-badge-fan {
+      background: #f59e0b;
+      color: #000;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .user-name {
+      font-weight: 800;
+      font-size: 15px;
+      color: #38bdf8;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .speech-text {
+      font-size: 20px;
+      font-weight: 600;
+      color: #ffffff;
+      line-height: 1.35;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+      word-break: break-word;
+    }
+    .equalizer {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 22px;
+      min-width: 20px;
+    }
+    .bar {
+      width: 4px;
+      background: #38bdf8;
+      border-radius: 2px;
+      animation: bounce 0.8s ease-in-out infinite alternate;
+    }
+    .bar:nth-child(2) { animation-delay: 0.2s; height: 16px; background: #06b6d4; }
+    .bar:nth-child(3) { animation-delay: 0.4s; height: 22px; background: #10b981; }
+    .bar:nth-child(4) { animation-delay: 0.1s; height: 12px; background: #38bdf8; }
+    @keyframes bounce {
+      0% { height: 4px; }
+      100% { height: 22px; }
+    }
+    #gift-card {
+      position: absolute;
+      top: 24px;
+      opacity: 0;
+      transform: translateY(-20px) scale(0.9);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(217, 119, 6, 0.95));
+      border: 2px solid #fde68a;
+      border-radius: 14px;
+      padding: 12px 24px;
+      box-shadow: 0 10px 30px rgba(245, 158, 11, 0.4);
+      color: #000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 16px;
+    }
+    #gift-card.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .gift-icon { font-size: 26px; }
+  </style>
+</head>
+<body>
+  <div id="gift-card">
+    <span class="gift-icon">🎁</span>
+    <span id="gift-text"></span>
+  </div>
+
+  <div id="subtitle-card">
+    <div class="equalizer">
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+      <div class="bar"></div>
+    </div>
+    <div style="flex: 1;">
+      <div class="user-name">
+        <span id="sub-fan-badge" class="user-badge-fan" style="display: none;"></span>
+        <span id="sub-user"></span>
+      </div>
+      <div class="speech-text" id="sub-text"></div>
+    </div>
+  </div>
+
+  <script>
+    const ws = new WebSocket(`ws://${location.host}/ws`);
+    const subCard = document.getElementById('subtitle-card');
+    const subUser = document.getElementById('sub-user');
+    const subText = document.getElementById('sub-text');
+    const subBadge = document.getElementById('sub-fan-badge');
+    const giftCard = document.getElementById('gift-card');
+    const giftText = document.getElementById('gift-text');
+    let hideTimer = null;
+    let giftTimer = null;
+
+    function showSubtitle(user, text, fanLevel) {
+      clearTimeout(hideTimer);
+      subUser.textContent = user;
+      subText.textContent = text;
+      if (fanLevel && fanLevel > 0) {
+        subBadge.textContent = 'LV.' + fanLevel;
+        subBadge.style.display = 'inline-block';
+      } else {
+        subBadge.style.display = 'none';
+      }
+      subCard.className = 'visible';
+
+      const duration = Math.max(4500, text.length * 90);
+      hideTimer = setTimeout(() => {
+        subCard.className = '';
+      }, duration);
+    }
+
+    function showGiftAlert(text) {
+      clearTimeout(giftTimer);
+      giftText.textContent = text;
+      giftCard.className = 'visible';
+      giftTimer = setTimeout(() => {
+        giftCard.className = '';
+      }, 4000);
+    }
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'tts_instant') {
+        showSubtitle(data.item.user, data.item.display || data.item.text, data.item.fan_level);
+      } else if (data.type === 'speaking_start') {
+        showSubtitle(data.item.user, data.item.display || data.item.text, data.item.fan_level);
+      } else if (data.type === 'chat_log' && data.data.type === 'gift') {
+        showGiftAlert(`${data.data.user} ${data.data.text}`);
+      } else if (data.type === 'client_skip') {
+        subCard.className = '';
+      }
+    };
+  </script>
+</body>
+</html>
+"""
+
+@app.get("/overlay", response_class=HTMLResponse)
+async def serve_overlay():
+    return OVERLAY_HTML
 
 def find_available_port(preferred=8080):
     for p in range(preferred, preferred + 20):
