@@ -33,6 +33,11 @@ import time
 import uuid
 import socket
 import threading
+import tempfile
+import zipfile
+import shutil
+import subprocess
+import webbrowser
 import httpx
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -43,8 +48,9 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.1.0"
+CURRENT_VERSION = "1.2.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
+active_port: int = 8080
 
 # Determine config and asset file location
 if getattr(sys, 'frozen', False):
@@ -59,7 +65,8 @@ CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 DEFAULT_CONFIG = {
     "username": "",
     "engine": "instant",
-    "voice": "en-US-AvaNeural",
+    "voice": "en-US-JennyNeural",
+    "native_voice_name": "",
     "volume": 1.0,
     "cooldown": 5,
     "max_chars": 120,
@@ -112,7 +119,8 @@ class AppState:
         self.status: str = "disconnected"
         self.status_msg: str = "Ready to connect"
         self.engine: str = cfg.get("engine", "instant")
-        self.voice: str = cfg.get("voice", "en-US-AvaNeural")
+        self.voice: str = cfg.get("voice", "en-US-JennyNeural")
+        self.native_voice_name: str = cfg.get("native_voice_name", "")
         self.volume: float = cfg.get("volume", 1.0)
         self.cooldown: int = cfg.get("cooldown", 5)
         self.max_chars: int = cfg.get("max_chars", 120)
@@ -140,6 +148,7 @@ class AppState:
             "username": self.username,
             "engine": self.engine,
             "voice": self.voice,
+            "native_voice_name": self.native_voice_name,
             "volume": self.volume,
             "cooldown": self.cooldown,
             "max_chars": self.max_chars,
@@ -166,6 +175,7 @@ class SpeakRequest(BaseModel):
 class SettingsRequest(BaseModel):
     engine: Optional[str] = None
     voice: Optional[str] = None
+    native_voice_name: Optional[str] = None
     volume: Optional[float] = None
     cooldown: Optional[int] = None
     max_chars: Optional[int] = None
@@ -467,6 +477,91 @@ async def api_check_update():
         "release_url": f"https://github.com/{GITHUB_REPO}/releases"
     }
 
+@app.post("/api/open-browser")
+async def api_open_browser():
+    try:
+        webbrowser.open(f"http://127.0.0.1:{active_port}")
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/install-update")
+async def api_install_update():
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers={"User-Agent": "TikTokLiveTTS-App"})
+            if resp.status_code != 200:
+                return {"status": "error", "message": f"GitHub returned HTTP {resp.status_code}"}
+            data = resp.json()
+            assets = data.get("assets", [])
+            download_url = None
+            for asset in assets:
+                if asset.get("name") == "TikTokLiveTTS-Windows.zip":
+                    download_url = asset.get("browser_download_url")
+                    break
+            if not download_url:
+                return {"status": "error", "message": "No Windows executable ZIP found in latest release"}
+
+            temp_dir = os.path.join(tempfile.gettempdir(), "tiktok_tts_update")
+            os.makedirs(temp_dir, exist_ok=True)
+            zip_dest = os.path.join(temp_dir, "update.zip")
+
+            await broadcast({"type": "update_progress", "status": "Downloading update (10%)...", "percent": 10})
+
+            async with client.stream("GET", download_url, follow_redirects=True) as stream:
+                total_bytes = int(stream.headers.get("content-length", 0))
+                downloaded = 0
+                with open(zip_dest, "wb") as f:
+                    async for chunk in stream.aiter_bytes():
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_bytes > 0:
+                            pct = int((downloaded / total_bytes) * 75) + 10
+                            await broadcast({"type": "update_progress", "status": f"Downloading ({pct}%)...", "percent": pct})
+
+            await broadcast({"type": "update_progress", "status": "Extracting update package...", "percent": 90})
+            extract_dir = os.path.join(temp_dir, "extracted")
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir, ignore_errors=True)
+            os.makedirs(extract_dir, exist_ok=True)
+
+            with zipfile.ZipFile(zip_dest, "r") as z:
+                z.extractall(extract_dir)
+
+            source_folder = extract_dir
+            for root, dirs, files in os.walk(extract_dir):
+                if "TikTokLiveTTS.exe" in files:
+                    source_folder = root
+                    break
+
+            target_dir = BASE_DIR
+            target_exe = os.path.join(target_dir, "TikTokLiveTTS.exe")
+
+            bat_path = os.path.join(temp_dir, "apply_update.bat")
+            with open(bat_path, "w", encoding="utf-8") as bf:
+                bf.write(f"""@echo off
+timeout /t 2 /nobreak >nul
+robocopy "{source_folder}" "{target_dir}" /E /IS /IT /nfl /ndl /njh /njs >nul
+start "" "{target_exe}"
+exit
+""")
+
+            await broadcast({"type": "update_progress", "status": "Update installed! Restarting app...", "percent": 100})
+
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            subprocess.Popen(["cmd.exe", "/c", bat_path], creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, close_fds=True)
+
+            def do_exit():
+                time.sleep(1.2)
+                os._exit(0)
+
+            threading.Thread(target=do_exit, daemon=True).start()
+            return {"status": "ok", "message": "Update downloaded, restarting in 2 seconds..."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/connect")
 async def api_connect(req: ConnectRequest):
     if state.task and not state.task.done():
@@ -516,6 +611,8 @@ async def api_settings(req: SettingsRequest):
         state.engine = req.engine
     if req.voice is not None:
         state.voice = req.voice
+    if req.native_voice_name is not None:
+        state.native_voice_name = req.native_voice_name
     if req.volume is not None:
         state.volume = req.volume
     if req.cooldown is not None:
@@ -847,14 +944,16 @@ HTML_CONTENT = """<!DOCTYPE html>
 <body>
   <div id="update-banner">
     <span id="update-text">🚀 A new version of TikTok Live TTS is available!</span>
-    <a id="update-link" href="#" target="_blank">Download Update</a>
+    <button id="update-btn" class="btn-primary" style="padding: 4px 12px; font-size: 12px;" onclick="installUpdate()">⚡ 1-Click Update & Restart</button>
+    <a id="update-link" href="#" target="_blank" style="margin-left: 8px;">View Changelog</a>
   </div>
 
   <header>
     <div class="logo-group">
       <span class="logo-icon">🎙️</span>
       <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.1.0</span>
+      <span class="version-tag" id="app-version">v1.2.0</span>
+      <button class="btn-secondary" style="font-size: 11px; padding: 3px 9px; margin-left: 8px; border-radius: 6px;" onclick="openInBrowser()">🌐 Open in Chrome</button>
     </div>
     <div class="header-badges">
       <div id="latency-badge" class="badge latency">
@@ -895,22 +994,34 @@ HTML_CONTENT = """<!DOCTYPE html>
         </div>
 
         <div id="instant-voice-block">
-          <label>Native OS Voice</label>
+          <label>Native Browser / OS Voice</label>
           <select id="browser-voice-select"></select>
-          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">Zero delay. Speaks instantaneously when viewer chats.</p>
+          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). <i>Tip: Click "Open in Chrome" in header for 20+ Google voices!</i></p>
         </div>
 
         <div id="cloud-voice-block" style="display: none;">
-          <label>Microsoft Cloud Neural Voice</label>
+          <label>Microsoft Cloud Neural Voice (HD)</label>
           <select id="cloud-voice-select" onchange="updateSettings()">
-            <option value="en-US-AvaNeural">Ava (US Female - Natural/Friendly)</option>
-            <option value="en-US-ChristopherNeural">Christopher (US Male - Energetic/Hype)</option>
-            <option value="en-GB-SoniaNeural">Sonia (British Female - Clean/Crisp)</option>
-            <option value="en-US-AndrewNeural">Andrew (US Male - Warm/Casual)</option>
-            <option value="en-US-BrianNeural">Brian (US Male - Deep/Radio)</option>
-            <option value="en-US-EmmaNeural">Emma (US Female - Cheerful)</option>
+            <optgroup label="Popular Voices (US English)">
+              <option value="en-US-JennyNeural">Jenny (US Female - Natural & Expressive)</option>
+              <option value="en-US-GuyNeural">Guy (US Male - Clear & Dynamic)</option>
+              <option value="en-US-AvaNeural">Ava (US Female - Warm & Friendly)</option>
+              <option value="en-US-ChristopherNeural">Christopher (US Male - Energetic / Hype)</option>
+              <option value="en-US-AriaNeural">Aria (US Female - Smooth & Clear)</option>
+              <option value="en-US-AndrewNeural">Andrew (US Male - Casual Conversation)</option>
+              <option value="en-US-BrianNeural">Brian (US Male - Deep Radio Announcer)</option>
+              <option value="en-US-EmmaNeural">Emma (US Female - Cheerful & Bright)</option>
+            </optgroup>
+            <optgroup label="International English">
+              <option value="en-GB-SoniaNeural">Sonia (British Female - Crisp)</option>
+              <option value="en-GB-RyanNeural">Ryan (British Male - Friendly)</option>
+              <option value="en-GB-LibbyNeural">Libby (British Female - Storyteller)</option>
+              <option value="en-AU-NatashaNeural">Natasha (Australian Female)</option>
+              <option value="en-CA-ClaraNeural">Clara (Canadian Female)</option>
+              <option value="en-IN-NeerjaNeural">Neerja (Indian English Female)</option>
+            </optgroup>
           </select>
-          <p style="font-size: 11px; color: #f59e0b; margin-top: 5px;">High fidelity, requires ~3-5s network buffering per message.</p>
+          <p style="font-size: 11px; color: #f59e0b; margin-top: 5px;">High fidelity cloud voice. Requires ~2-3s streaming buffer.</p>
         </div>
 
         <div style="margin-top: 12px;">
@@ -1031,6 +1142,7 @@ HTML_CONTENT = """<!DOCTYPE html>
   <script>
     let currentEngine = "instant";
     let currentVolume = 1.0;
+    let savedNativeVoice = "";
     let audioQueue = [];
     let isPlaying = false;
     let activeAudio = null;
@@ -1074,19 +1186,48 @@ HTML_CONTENT = """<!DOCTYPE html>
       } catch (e) {}
     }
 
+    function openInBrowser() {
+      fetch('/api/open-browser', { method: 'POST' });
+    }
+
+    async function installUpdate() {
+      const btn = document.getElementById('update-btn');
+      btn.disabled = true;
+      btn.textContent = "⏳ Preparing update...";
+      try {
+        const res = await fetch('/api/install-update', { method: 'POST' });
+        const data = await res.json();
+        if (data.status !== 'ok') {
+          alert("Update error: " + data.message);
+          btn.disabled = false;
+          btn.textContent = "⚡ 1-Click Update & Restart";
+        }
+      } catch (err) {
+        alert("Update error: " + err);
+        btn.disabled = false;
+        btn.textContent = "⚡ 1-Click Update & Restart";
+      }
+    }
+
     function populateBrowserVoices() {
       browserVoices = window.speechSynthesis.getVoices();
       const select = document.getElementById('browser-voice-select');
       select.innerHTML = '';
+      let matchedIndex = -1;
       browserVoices.forEach((v, i) => {
         const opt = document.createElement('option');
         opt.value = i;
         opt.textContent = `${v.name} (${v.lang})`;
-        if (v.default || v.name.includes('Natural') || v.lang.startsWith('en')) {
-          if (!select.value) opt.selected = true;
+        if (savedNativeVoice && v.name === savedNativeVoice) {
+          matchedIndex = i;
+        } else if (!savedNativeVoice && matchedIndex === -1 && (v.default || v.name.includes('Natural') || v.lang.startsWith('en'))) {
+          matchedIndex = i;
         }
         select.appendChild(opt);
       });
+      if (matchedIndex >= 0) {
+        select.value = matchedIndex;
+      }
     }
 
     if ('speechSynthesis' in window) {
@@ -1121,6 +1262,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         if (cfg.username) document.getElementById('username-input').value = cfg.username;
         if (cfg.engine) setEngine(cfg.engine);
         if (cfg.voice) document.getElementById('cloud-voice-select').value = cfg.voice;
+        if (cfg.native_voice_name) {
+          savedNativeVoice = cfg.native_voice_name;
+          populateBrowserVoices();
+        }
         if (cfg.volume !== undefined) {
           document.getElementById('vol-slider').value = cfg.volume;
           changeVolume(cfg.volume);
@@ -1154,6 +1299,9 @@ HTML_CONTENT = """<!DOCTYPE html>
         playNextCloud();
       } else if (data.type === 'client_skip') {
         skipAudio();
+      } else if (data.type === 'update_progress') {
+        const btn = document.getElementById('update-btn');
+        if (btn) btn.textContent = data.status;
       }
     };
 
@@ -1300,10 +1448,19 @@ HTML_CONTENT = """<!DOCTYPE html>
       await fetch('/api/clear-queue', { method: 'POST' });
     }
 
+    document.getElementById('browser-voice-select').onchange = () => {
+      const idx = document.getElementById('browser-voice-select').value;
+      if (browserVoices[idx]) savedNativeVoice = browserVoices[idx].name;
+      updateSettings();
+    };
+
     async function updateSettings() {
+      const nativeSelect = document.getElementById('browser-voice-select');
+      const selectedNativeVoice = (browserVoices[nativeSelect.value] ? browserVoices[nativeSelect.value].name : savedNativeVoice);
       const payload = {
         engine: currentEngine,
         voice: document.getElementById('cloud-voice-select').value,
+        native_voice_name: selectedNativeVoice,
         volume: currentVolume,
         cooldown: parseInt(document.getElementById('cooldown-input').value) || 5,
         max_chars: parseInt(document.getElementById('maxlen-input').value) || 120,
