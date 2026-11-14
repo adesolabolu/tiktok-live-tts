@@ -1,30 +1,14 @@
 import sys
 import os
-import traceback
-import ctypes
+import multiprocessing
 
-# Windows MessageBox for fatal crash alerts in GUI mode
-def alert_error(title, message):
-    try:
-        ctypes.windll.user32.MessageBoxW(0, str(message), str(title), 0x10)
-    except Exception:
-        pass
+multiprocessing.freeze_support()
 
-# Setup logging file for debug
-debug_log_path = os.path.join(os.path.expanduser("~"), "tiktok_tts_debug.log")
-try:
-    log_fp = open(debug_log_path, "a", encoding="utf-8")
-    if sys.stdout is None:
-        sys.stdout = log_fp
-    if sys.stderr is None:
-        sys.stderr = log_fp
-except Exception:
-    if sys.stdout is None:
-        sys.stdout = open(os.devnull, "w")
-    if sys.stderr is None:
-        sys.stderr = open(os.devnull, "w")
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
-# Explicit PyInstaller dynamic imports for Uvicorn
 import uvicorn
 import uvicorn.config
 import uvicorn.main
@@ -48,7 +32,6 @@ import time
 import uuid
 import socket
 import threading
-import webbrowser
 import httpx
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -59,7 +42,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent
 
-CURRENT_VERSION = "1.0.2"
+CURRENT_VERSION = "1.0.3"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 
 app = FastAPI(title="TikTok Live TTS Studio", version=CURRENT_VERSION)
@@ -598,15 +581,6 @@ HTML_CONTENT = """<!DOCTYPE html>
     .log-user { font-weight: 600; color: #38bdf8; margin-right: 8px; }
     .log-text { color: #f1f5f9; }
     .log-time { font-size: 11px; color: #64748b; margin-left: 12px; white-space: nowrap; }
-
-    #audio-unlock-banner {
-      background: #f59e0b;
-      color: #000;
-      font-weight: 600;
-      padding: 10px;
-      text-align: center;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
@@ -615,15 +589,11 @@ HTML_CONTENT = """<!DOCTYPE html>
     <a id="update-link" href="#" target="_blank">Download Update</a>
   </div>
 
-  <div id="audio-unlock-banner" onclick="unlockAudio()">
-    🔊 Audio is muted by browser policy. Click anywhere here to ENABLE live speech!
-  </div>
-
   <header>
     <div class="logo-group">
       <span class="logo-icon">🎙️</span>
       <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.0.2</span>
+      <span class="version-tag" id="app-version">v1.0.3</span>
     </div>
     <div class="header-badges">
       <div id="latency-badge" class="badge latency">
@@ -661,7 +631,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         </div>
 
         <div id="instant-voice-block">
-          <label>Native Browser/OS Voice</label>
+          <label>Native OS Voice</label>
           <select id="browser-voice-select"></select>
           <p style="font-size: 11px; color: #34d399; margin-top: 6px;">Zero network delay. Speaks instantly the millisecond chat sends a comment.</p>
         </div>
@@ -772,16 +742,6 @@ HTML_CONTENT = """<!DOCTYPE html>
       populateBrowserVoices();
     }
 
-    function unlockAudio() {
-      document.getElementById('audio-unlock-banner').style.display = 'none';
-      if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance('');
-        speechSynthesis.speak(u);
-      }
-      const silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA");
-      silent.play().catch(() => {});
-    }
-
     function setEngine(mode) {
       currentEngine = mode;
       document.getElementById('opt-instant').className = 'engine-option' + (mode === 'instant' ? ' active' : '');
@@ -866,7 +826,6 @@ HTML_CONTENT = """<!DOCTYPE html>
       activeAudio.onerror = finishPlay;
 
       activeAudio.play().catch(e => {
-        console.warn("Autoplay block:", e);
         finishPlay();
       });
     }
@@ -928,7 +887,6 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     async function connectStream() {
-      unlockAudio();
       const user = document.getElementById('username-input').value.trim();
       if (!user) return alert("Please enter a TikTok @username!");
       await fetch('/api/connect', {
@@ -943,7 +901,6 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     async function sendTestSpeech() {
-      unlockAudio();
       const text = document.getElementById('test-text').value.trim();
       if (!text) return;
       await fetch('/api/speak', {
@@ -991,16 +948,10 @@ def find_available_port(preferred=8080):
     return preferred
 
 if __name__ == "__main__":
-    try:
-        active_port = find_available_port(8080)
+    active_port = find_available_port(8080)
 
-        def launch_browser():
-            time.sleep(1.2)
-            webbrowser.open(f"http://127.0.0.1:{active_port}")
-
-        threading.Thread(target=launch_browser, daemon=True).start()
-
-        # Run uvicorn server with explicit configuration
+    # Run the uvicorn server in a background thread
+    def run_server():
         config = uvicorn.Config(
             app=app,
             host="127.0.0.1",
@@ -1012,6 +963,27 @@ if __name__ == "__main__":
         )
         server = uvicorn.Server(config)
         server.run()
-    except Exception as e:
-        err_msg = traceback.format_exc()
-        alert_error("TikTok Live TTS Startup Error", err_msg)
+
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+
+    time.sleep(1.0)
+
+    try:
+        # Launch standalone native desktop application window using Edge WebView2
+        import webview
+        window = webview.create_window(
+            title="TikTok Live TTS Studio",
+            url=f"http://127.0.0.1:{active_port}",
+            width=1280,
+            height=820,
+            min_size=(900, 600)
+        )
+        webview.start()
+    except Exception:
+        # Fallback to browser if webview fails
+        import webbrowser
+        webbrowser.open(f"http://127.0.0.1:{active_port}")
+        # Keep main thread alive
+        while True:
+            time.sleep(1)
