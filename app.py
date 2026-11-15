@@ -48,7 +48,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.8.0"
+CURRENT_VERSION = "1.8.1"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -466,18 +466,20 @@ def check_filters(user, text: str) -> tuple[bool, str]:
     state.user_last_seen[user_id] = now
     return True, clean_text
 
+def get_voice_id_from_name(voice_name: str) -> Optional[str]:
+    if not voice_name:
+        return None
+    vn = voice_name.lower().strip()
+    if vn.startswith("store:"):
+        return vn.split(":")[1].strip()
+    for vid, meta in PIPER_VOICE_CATALOG.items():
+        if vid in vn or meta["name"].lower() in vn:
+            return vid
+    return None
+
 async def handle_new_tts_item(user: str, raw_text: str, display_text: str, fan_level: int = 0):
     voice_name = state.native_voice_name or ""
-    v_id = None
-    if voice_name.startswith("store:"):
-        v_id = voice_name.split(":")[1]
-    elif voice_name in state.installed_voices:
-        v_id = voice_name
-    elif any(voice_name.lower().startswith(v["name"].lower()) for v in PIPER_VOICE_CATALOG.values()):
-        for k, v in PIPER_VOICE_CATALOG.items():
-            if voice_name.lower().startswith(v["name"].lower()) and k in state.installed_voices:
-                v_id = k
-                break
+    v_id = get_voice_id_from_name(voice_name)
 
     if v_id and v_id in state.installed_voices:
         loop = asyncio.get_event_loop()
@@ -899,8 +901,34 @@ async def api_disconnect():
 @app.post("/api/speak")
 async def api_speak(req: SpeakRequest):
     speech_text = req.text
+    voice_name = state.native_voice_name or ""
+    v_id = get_voice_id_from_name(voice_name)
+
+    if v_id and v_id in state.installed_voices:
+        loop = asyncio.get_event_loop()
+        b64 = await loop.run_in_executor(None, synthesize_piper, v_id, speech_text)
+        if b64:
+            await broadcast({
+                "type": "tts_audio",
+                "user": "Test User",
+                "display": req.text,
+                "audio_b64": b64
+            })
+            return {
+                "status": "ok",
+                "is_piper": True,
+                "voice_id": v_id,
+                "audio_b64": b64,
+                "text": req.text
+            }
+
     await handle_new_tts_item("Test User", speech_text, req.text)
-    return {"status": "ok", "queue_size": state.tts_queue.qsize()}
+    return {
+        "status": "ok",
+        "is_piper": False,
+        "voice": voice_name,
+        "text": req.text
+    }
 
 @app.post("/api/clear-queue")
 async def api_clear_queue():
@@ -1027,9 +1055,15 @@ async def websocket_endpoint(ws: WebSocket):
     try:
         while True:
             data = await ws.receive_json()
-            if data.get("action") == "skip":
+            if data.get("type") == "ping":
+                await ws.send_json({"type": "pong"})
+            elif data.get("action") == "skip":
                 await broadcast({"type": "client_skip"})
     except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
         state.websockets.discard(ws)
 
 HTML_CONTENT = """<!DOCTYPE html>
@@ -1486,7 +1520,12 @@ HTML_CONTENT = """<!DOCTYPE html>
           <div class="card-title">Speech Voice</div>
           <label>Selected Voice (Zero-Lag Offline)</label>
           <select id="browser-voice-select" onchange="updateSettings()"></select>
-          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button class="btn-secondary" style="flex: 1; font-size: 12px; padding: 7px 12px;" id="btn-test-active-voice" onclick="testActiveVoiceSample()">
+              ▶️ Play Sample of Selected Voice
+            </button>
+          </div>
+          <p style="font-size: 11px; color: #34d399; margin-top: 8px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
           <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
             Want more character voices? Go to the <b>🏪 Voice Store</b> tab to star or install voices.
           </p>
@@ -1848,7 +1887,52 @@ HTML_CONTENT = """<!DOCTYPE html>
       } catch (e) {}
     }
 
-    const ws = new WebSocket(`ws://${location.host}/ws`);
+    let ws = null;
+    let wsReconnectTimer = null;
+
+    function initWebSocket() {
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+      }
+      ws = new WebSocket(`ws://${location.host}/ws`);
+
+      ws.onopen = () => {
+        console.log("WebSocket connected to TTS engine");
+        if (wsReconnectTimer) {
+          clearTimeout(wsReconnectTimer);
+          wsReconnectTimer = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleWsMessage(data);
+        } catch (e) {
+          console.error("WS parse error:", e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.warn("WebSocket disconnected. Reconnecting in 2s...");
+        if (!wsReconnectTimer) {
+          wsReconnectTimer = setTimeout(initWebSocket, 2000);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket error:", err);
+      };
+    }
+
+    // Ping keepalive every 15 seconds
+    setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: "ping" })); } catch (e) {}
+      }
+    }, 15000);
+
+    initWebSocket();
 
     async function checkForUpdates(manual = false) {
       try {
@@ -1909,23 +1993,34 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     function populateBrowserVoices() {
-      browserVoices = window.speechSynthesis.getVoices();
+      if ('speechSynthesis' in window) {
+        browserVoices = window.speechSynthesis.getVoices() || [];
+      } else {
+        browserVoices = [];
+      }
       const select = document.getElementById('browser-voice-select');
       if (!select) return;
       select.innerHTML = '';
       let matchedIndex = -1;
 
-      // Group 1: Starred / Favorite Voices (pinned to top)
-      const starredCatalogItems = STORE_CATALOG.filter(v => starredVoices.includes(v.id));
-      if (starredCatalogItems.length > 0) {
+      // Group 1: Starred & Installed Voices (pinned to top)
+      const starredInstalled = STORE_CATALOG.filter(v => starredVoices.includes(v.id) && installedStoreVoices.includes(v.id));
+      if (starredInstalled.length > 0) {
         const starGroup = document.createElement('optgroup');
-        starGroup.label = "⭐ Favorite / Starred Voices";
-        starredCatalogItems.forEach(v => {
+        starGroup.label = "⭐ Starred Offline Voices";
+        starredInstalled.forEach(v => {
           const opt = document.createElement('option');
           opt.value = "store:" + v.id;
           opt.textContent = `⭐ ${v.name} (${v.subtitle})`;
-          if (savedNativeVoice === (v.name + " (" + v.subtitle + ")") || savedNativeVoice === v.id || savedNativeVoice === ("store:" + v.id)) {
+          const isMatch = savedNativeVoice && (
+            savedNativeVoice === ("store:" + v.id) ||
+            savedNativeVoice === v.id ||
+            savedNativeVoice.toLowerCase().includes(v.id) ||
+            savedNativeVoice.toLowerCase().includes(v.name.toLowerCase())
+          );
+          if (isMatch) {
             opt.selected = true;
+            matchedIndex = 9999;
           }
           starGroup.appendChild(opt);
         });
@@ -1942,8 +2037,15 @@ HTML_CONTENT = """<!DOCTYPE html>
           const opt = document.createElement('option');
           opt.value = "store:" + vId;
           opt.textContent = `✓ ${v ? v.name : vId} (0ms Offline)`;
-          if (savedNativeVoice === (v ? (v.name + " (" + v.subtitle + ")") : vId) || savedNativeVoice === ("store:" + vId)) {
+          const isMatch = savedNativeVoice && v && (
+            savedNativeVoice === ("store:" + vId) ||
+            savedNativeVoice === vId ||
+            savedNativeVoice.toLowerCase().includes(vId) ||
+            savedNativeVoice.toLowerCase().includes(v.name.toLowerCase())
+          );
+          if (isMatch) {
             opt.selected = true;
+            matchedIndex = 9999;
           }
           instGroup.appendChild(opt);
         });
@@ -1951,24 +2053,26 @@ HTML_CONTENT = """<!DOCTYPE html>
       }
 
       // Group 3: System / OS Native Voices
-      const osGroup = document.createElement('optgroup');
-      osGroup.label = "System / OS Native Voices";
-      browserVoices.forEach((v, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = `${v.name} (${v.lang})`;
-        if (savedNativeVoice && v.name === savedNativeVoice) {
-          matchedIndex = i;
-          opt.selected = true;
-        } else if (!savedNativeVoice && matchedIndex === -1 && (v.default || v.name.includes('Natural') || v.lang.startsWith('en'))) {
-          matchedIndex = i;
-          opt.selected = true;
-        }
-        osGroup.appendChild(opt);
-      });
-      select.appendChild(osGroup);
+      if (browserVoices.length > 0) {
+        const osGroup = document.createElement('optgroup');
+        osGroup.label = "System / Windows Voices";
+        browserVoices.forEach((v, i) => {
+          const opt = document.createElement('option');
+          opt.value = i;
+          opt.textContent = `${v.name} (${v.lang})`;
+          if (savedNativeVoice && (v.name === savedNativeVoice || savedNativeVoice.includes(v.name))) {
+            matchedIndex = i;
+            opt.selected = true;
+          } else if (!savedNativeVoice && matchedIndex === -1 && (v.default || v.name.includes('Natural') || v.lang.startsWith('en'))) {
+            matchedIndex = i;
+            opt.selected = true;
+          }
+          osGroup.appendChild(opt);
+        });
+        select.appendChild(osGroup);
+      }
 
-      if (matchedIndex >= 0 && !select.value.startsWith('store:')) {
+      if (matchedIndex >= 0 && matchedIndex < 9999 && !select.value.startsWith('store:')) {
         select.value = matchedIndex;
       }
     }
@@ -2150,26 +2254,139 @@ HTML_CONTENT = """<!DOCTYPE html>
       }
     }
 
+    function b64toBlob(b64Data, contentType) {
+      contentType = contentType || 'audio/wav';
+      const byteCharacters = atob(b64Data);
+      const byteArrays = [];
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        byteArrays.push(new Uint8Array(byteNumbers));
+      }
+      return new Blob(byteArrays, { type: contentType });
+    }
+
     function playPiperAudio(item) {
       const userEl = document.getElementById('spk-user');
       const textEl = document.getElementById('spk-text');
       userEl.style.display = 'block';
-      userEl.textContent = '⚡ ' + item.user;
+      userEl.textContent = '⚡ ' + (item.user || 'Voice');
       textEl.className = 'speaking-text';
       textEl.textContent = item.display || item.text;
 
       if (activeAudio) {
-        activeAudio.pause();
+        try { activeAudio.pause(); } catch (e) {}
         activeAudio = null;
       }
-      activeAudio = new Audio("data:audio/wav;base64," + item.audio_b64);
-      if (activeAudio.setSinkId && selectedAudioDevice !== 'default') {
-        activeAudio.setSinkId(selectedAudioDevice).catch(() => {});
+      if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
       }
-      activeAudio.volume = currentVolume;
-      activeAudio.onended = finishPlay;
-      activeAudio.onerror = finishPlay;
-      activeAudio.play().catch(finishPlay);
+
+      try {
+        const blob = b64toBlob(item.audio_b64, 'audio/wav');
+        const blobUrl = URL.createObjectURL(blob);
+        activeAudio = new Audio(blobUrl);
+        if (activeAudio.setSinkId && selectedAudioDevice && selectedAudioDevice !== 'default') {
+          activeAudio.setSinkId(selectedAudioDevice).catch(() => {});
+        }
+        activeAudio.volume = currentVolume;
+        activeAudio.onended = () => {
+          URL.revokeObjectURL(blobUrl);
+          finishPlay();
+        };
+        activeAudio.onerror = (e) => {
+          console.error("Piper Audio error:", e);
+          URL.revokeObjectURL(blobUrl);
+          finishPlay();
+        };
+        activeAudio.play().catch(e => {
+          console.error("Piper Audio play() error:", e);
+          finishPlay();
+        });
+      } catch (err) {
+        console.error("playPiperAudio exception:", err);
+        finishPlay();
+      }
+    }
+
+    function speakSystemVoice(text, voiceName) {
+      if (!('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.resume) window.speechSynthesis.resume();
+      } catch (e) {}
+
+      const userEl = document.getElementById('spk-user');
+      const textEl = document.getElementById('spk-text');
+      userEl.style.display = 'block';
+      userEl.textContent = '⚡ ' + (voiceName || 'Local Voice');
+      textEl.className = 'speaking-text';
+      textEl.textContent = text;
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.volume = currentVolume;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      const targetName = voiceName || savedNativeVoice;
+      let targetVoice = null;
+      if (targetName && browserVoices.length > 0) {
+        targetVoice = browserVoices.find(v => v.name === targetName || targetName.includes(v.name));
+      }
+      if (!targetVoice) {
+        const selectVal = document.getElementById('browser-voice-select').value;
+        const idx = parseInt(selectVal);
+        if (!isNaN(idx) && browserVoices[idx]) targetVoice = browserVoices[idx];
+      }
+      if (targetVoice) utterance.voice = targetVoice;
+
+      utterance.onend = finishPlay;
+      utterance.onerror = (e) => {
+        console.error("SpeechSynthesis error:", e);
+        finishPlay();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function speakInstant(item) {
+      speakSystemVoice(item.text, item.voice || savedNativeVoice);
+    }
+
+    async function testActiveVoiceSample() {
+      const btn = document.getElementById('btn-test-active-voice');
+      const origText = btn ? btn.textContent : "▶️ Play Sample of Selected Voice";
+      if (btn) btn.textContent = "⏳ Speaking Sample...";
+      
+      const testPhrase = "Hello! This voice is ready for your TikTok livestream.";
+      try {
+        const res = await fetch('/api/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: testPhrase })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          if (data.is_piper && data.audio_b64) {
+            playPiperAudio({
+              user: "Voice Preview",
+              display: testPhrase,
+              audio_b64: data.audio_b64
+            });
+          } else {
+            speakSystemVoice(testPhrase, data.voice);
+          }
+        }
+      } catch (err) {
+        console.error("testActiveVoiceSample error:", err);
+      } finally {
+        setTimeout(() => {
+          if (btn) btn.textContent = origText;
+        }, 1500);
+      }
     }
 
     if ('speechSynthesis' in window) {
@@ -2214,8 +2431,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       currentEngine = "instant";
     }
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    function handleWsMessage(data) {
       if (data.type === 'init') {
         updateStatus(data.status, data.message);
         if (data.version) {
@@ -2282,26 +2498,6 @@ HTML_CONTENT = """<!DOCTYPE html>
         const btn = document.getElementById('modal-update-btn');
         if (btn) btn.textContent = data.status;
       }
-    };
-
-    function speakInstant(item) {
-      if (!('speechSynthesis' in window)) return;
-      const userEl = document.getElementById('spk-user');
-      const textEl = document.getElementById('spk-text');
-      userEl.style.display = 'block';
-      userEl.textContent = '⚡ ' + item.user;
-      textEl.className = 'speaking-text';
-      textEl.textContent = item.display || item.text;
-
-      const utterance = new SpeechSynthesisUtterance(item.text);
-      utterance.volume = currentVolume;
-      const voiceIdx = document.getElementById('browser-voice-select').value;
-      if (browserVoices[voiceIdx]) utterance.voice = browserVoices[voiceIdx];
-
-      utterance.onend = finishPlay;
-      utterance.onerror = finishPlay;
-
-      speechSynthesis.speak(utterance);
     }
 
     function playNextCloud() {
@@ -2401,7 +2597,8 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     function applyPreset(text) {
-      document.getElementById('test-text').value = text;
+      const input = document.getElementById('test-text');
+      if (input) input.value = text;
       sendTestSpeech();
     }
 
@@ -2420,14 +2617,31 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     async function sendTestSpeech() {
-      const text = document.getElementById('test-text').value.trim();
+      const input = document.getElementById('test-text');
+      const text = input ? input.value.trim() : "";
       if (!text) return;
-      await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text })
-      });
-      document.getElementById('test-text').value = '';
+      try {
+        const res = await fetch('/api/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          if (data.is_piper && data.audio_b64) {
+            playPiperAudio({
+              user: "Test User",
+              display: text,
+              audio_b64: data.audio_b64
+            });
+          } else if (!data.is_piper) {
+            speakSystemVoice(text, data.voice);
+          }
+        }
+      } catch (e) {
+        console.error("sendTestSpeech error:", e);
+      }
+      if (input) input.value = '';
     }
 
     async function clearQueue() {
@@ -2676,7 +2890,6 @@ OVERLAY_HTML = """<!DOCTYPE html>
   </div>
 
   <script>
-    const ws = new WebSocket(`ws://${location.host}/ws`);
     const subCard = document.getElementById('subtitle-card');
     const subUser = document.getElementById('sub-user');
     const subText = document.getElementById('sub-text');
@@ -2713,18 +2926,32 @@ OVERLAY_HTML = """<!DOCTYPE html>
       }, 4000);
     }
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'tts_instant') {
-        showSubtitle(data.item.user, data.item.display || data.item.text, data.item.fan_level);
-      } else if (data.type === 'speaking_start') {
-        showSubtitle(data.item.user, data.item.display || data.item.text, data.item.fan_level);
-      } else if (data.type === 'chat_log' && data.data.type === 'gift') {
-        showGiftAlert(`${data.data.user} ${data.data.text}`);
-      } else if (data.type === 'client_skip') {
-        subCard.className = '';
+    let overlayWs = null;
+    function connectOverlayWs() {
+      if (overlayWs) {
+        try { overlayWs.close(); } catch (e) {}
       }
-    };
+      overlayWs = new WebSocket(`ws://${location.host}/ws`);
+      overlayWs.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'tts_instant') {
+            showSubtitle(data.item.user, data.item.display || data.item.text, data.item.fan_level);
+          } else if (data.type === 'tts_audio' || data.type === 'speaking_start') {
+            showSubtitle(data.user, data.display || data.text, data.fan_level || 0);
+          } else if (data.type === 'chat_log' && data.data && data.data.type === 'gift') {
+            showGiftAlert(`${data.data.user} ${data.data.text}`);
+          } else if (data.type === 'client_skip') {
+            subCard.className = '';
+          }
+        } catch (e) {}
+      };
+      overlayWs.onclose = () => {
+        setTimeout(connectOverlayWs, 2000);
+      };
+      overlayWs.onerror = () => {};
+    }
+    connectOverlayWs();
   </script>
 </body>
 </html>

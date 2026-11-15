@@ -10,7 +10,7 @@ A high-performance, standalone Text-to-Speech (TTS) studio engineered specifical
 * **⚡ Instant Zero-Lag Speech (<30ms):** Native hardware-accelerated speech synthesis directly through your system audio subsystem.
 * **🎬 TikTok Live Studio Overlay (`/overlay`):** Dedicated transparent browser overlay HUD for TikTok Live Studio with animated live chat subtitles, fan badges, and gift announcements.
 * **🎛️ 4-Tab Streamer Dashboard:**
-  * **🎙️ Live TTS & Moderation:** Streamer controls, live chat monitor, manual speech trigger, anti-spam automute, and badge gating.
+  * **🎙️ Live TTS & Moderation:** Streamer controls, live chat monitor, manual speech trigger, anti-spam automute, badge gating, and a dedicated **`▶️ Play Sample of Selected Voice`** button for instant audio previewing.
   * **🎬 TikTok Studio Overlay:** Custom subtitle display HUD, URL copy, and TikTok Live Studio setup guide.
   * **🏪 Voice Store:** High-fidelity offline neural character voice catalog with authentic streaming audio previews (**Play / Pause**), **⭐ Star / Favorite** pinning to the top of your list, 1-click **Install**, and 1-click **Uninstall** to reclaim disk space anytime.
   * **⚙️ Settings & Audio Routing:** Audio device selector (`navigator.mediaDevices`), cooldown timers, and safety filters.
