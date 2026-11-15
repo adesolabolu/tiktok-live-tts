@@ -4,9 +4,12 @@ A high-performance, standalone Text-to-Speech (TTS) studio engineered specifical
 
 ---
 
-## ⚡ Key Highlights (v1.9.1)
+## ⚡ Key Highlights (v1.9.2)
 
-* **🛡️ Enhanced Audience & Fan Club Permissions (v1.9.1 Fix):**
+* **🔇 Clean Message TTS & Anti-Glitch Audio Queue (v1.9.2 Fix):**
+  * **Removed Fan Club Spoken Level Announcements:** Eliminates the glitch where the TTS blurted out "Congratulations for joining the fan club at level X!" before reading chat messages. Only clean comment text is spoken aloud.
+  * **Sequential Audio Playback Queue:** New queue pipeline plays comments smoothly one after another with natural pacing, preventing rapid chat messages from clipping, cutting each other off, or stuttering.
+* **🛡️ Enhanced Audience & Fan Club Permissions (v1.9.1):**
   * Fully adapted to TikTokLive v3 protobuf structures (`UserIdentity` and `BadgeStruct`).
   * **Followers Only:** Correctly recognizes room followers, moderators, anchors, and mutual followers via anchor identity flags and follow status.
   * **Subscribers Only:** Seamlessly detects active subscribers and super fans.

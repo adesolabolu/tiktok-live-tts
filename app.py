@@ -46,9 +46,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import edge_tts
 from TikTokLive import TikTokLiveClient
-from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
+from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.9.1"
+CURRENT_VERSION = "1.9.2"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -777,28 +777,6 @@ async def tiktok_runner(username: str):
                     await broadcast({"type": "gift_chime"})
                 speech = f"Welcome {user_name} to the subscriber club!" if months <= 1 else f"Thank you {user_name} for resubscribing for {months} months!"
                 await handle_new_tts_item(user_name, speech, text, fan_level=1)
-
-        @client.on(SuperFanJoinEvent)
-        async def on_superfan_join(event: SuperFanJoinEvent):
-            user_name = getattr(event.user, 'nickname', 'Fan') if hasattr(event, 'user') and event.user else 'Fan'
-            level = getattr(event, 'fans_level_param', 1) or 1
-            text = f"Joined Fan Club (Level {level})!"
-            log_item = {
-                "type": "fan",
-                "user": user_name,
-                "fan_level": level,
-                "text": text,
-                "allowed": state.fan_announcements_enabled,
-                "reason": "" if state.fan_announcements_enabled else "Announcements disabled",
-                "time": time.strftime("%H:%M:%S")
-            }
-            await broadcast({"type": "chat_log", "data": log_item})
-
-            if state.fan_announcements_enabled:
-                if state.gift_sound_enabled:
-                    await broadcast({"type": "gift_chime"})
-                speech = f"Congratulations {user_name} for joining the fan club at level {level}!"
-                await handle_new_tts_item(user_name, speech, text, fan_level=level)
 
         @client.on(DisconnectEvent)
         async def on_disconnect(event: DisconnectEvent):
@@ -1981,7 +1959,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       <div>
         <div class="brand-title">
           <span>TikTok Live TTS Studio</span>
-          <span class="version-pill" id="app-version">v1.9.1</span>
+          <span class="version-pill" id="app-version">v1.9.2</span>
         </div>
       </div>
     </div>
@@ -1989,7 +1967,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="telemetry-strip">
       <button id="update-pill" class="update-pill" onclick="openUpdateModal()">
         <span class="update-pulse"></span>
-        <span id="update-pill-text">v1.9.1 Ready</span>
+        <span id="update-pill-text">v1.9.2 Ready</span>
       </button>
       <div id="latency-badge" class="telemetry-badge latency">
         <span>⚡ 0ms Offline CPU Engine</span>
@@ -2348,7 +2326,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
           <div>
             <div style="font-size: 14px; font-weight: 700; color: #fff;">TikTok Live TTS Studio</div>
-            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.1</b></div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.2</b></div>
           </div>
           <button class="btn-secondary" style="flex: 0 0 150px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
         </div>
@@ -2382,7 +2360,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
   <footer>
     <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers maintain full moderation responsibility.</span>
-    <span>TikTok Live TTS Studio v1.9.1 • 0ms Local Neural Voice Engine</span>
+    <span>TikTok Live TTS Studio v1.9.2 • 0ms Local Neural Voice Engine</span>
   </footer>
 
   <script>
@@ -3002,23 +2980,44 @@ HTML_CONTENT = """<!DOCTYPE html>
       return new Blob(byteArrays, { type: contentType });
     }
 
+    function enqueueAudio(task) {
+      audioQueue.push(task);
+      updateQueue(audioQueue.length + (isPlaying ? 1 : 0));
+      if (!isPlaying) {
+        processNextInQueue();
+      }
+    }
+
+    function processNextInQueue() {
+      if (audioQueue.length === 0) {
+        isPlaying = false;
+        updateQueue(0);
+        return;
+      }
+      isPlaying = true;
+      const nextTask = audioQueue.shift();
+      updateQueue(audioQueue.length + 1);
+
+      if (nextTask.type === 'piper') {
+        playPiperAudio(nextTask.data);
+      } else if (nextTask.type === 'instant') {
+        speakInstant(nextTask.data);
+      }
+    }
+
     function playPiperAudio(item) {
       const userEl = document.getElementById('spk-user');
       const textEl = document.getElementById('spk-text');
       const waveEl = document.getElementById('spk-wave');
-      userEl.style.display = 'block';
-      userEl.textContent = '⚡ ' + (item.user || 'Voice');
-      textEl.className = 'speaking-text';
-      textEl.textContent = item.display || item.text;
+      if (userEl) {
+        userEl.style.display = 'block';
+        userEl.textContent = '⚡ ' + (item.user || 'Voice');
+      }
+      if (textEl) {
+        textEl.className = 'speaking-text';
+        textEl.textContent = item.display || item.text;
+      }
       if (waveEl) waveEl.classList.add('eq-active');
-
-      if (activeAudio) {
-        try { activeAudio.pause(); } catch (e) {}
-        activeAudio = null;
-      }
-      if (window.speechSynthesis) {
-        try { window.speechSynthesis.cancel(); } catch (e) {}
-      }
 
       try {
         const blob = b64toBlob(item.audio_b64, 'audio/wav');
@@ -3039,6 +3038,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         };
         activeAudio.play().catch(e => {
           console.error("Piper Audio play() error:", e);
+          URL.revokeObjectURL(blobUrl);
           finishPlay();
         });
       } catch (err) {
@@ -3048,7 +3048,10 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     function speakSystemVoice(text, voiceName) {
-      if (!('speechSynthesis' in window)) return;
+      if (!('speechSynthesis' in window)) {
+        finishPlay();
+        return;
+      }
       try {
         window.speechSynthesis.cancel();
         if (window.speechSynthesis.resume) window.speechSynthesis.resume();
@@ -3057,10 +3060,14 @@ HTML_CONTENT = """<!DOCTYPE html>
       const userEl = document.getElementById('spk-user');
       const textEl = document.getElementById('spk-text');
       const waveEl = document.getElementById('spk-wave');
-      userEl.style.display = 'block';
-      userEl.textContent = '⚡ ' + (voiceName || 'Local Voice');
-      textEl.className = 'speaking-text';
-      textEl.textContent = text;
+      if (userEl) {
+        userEl.style.display = 'block';
+        userEl.textContent = '⚡ ' + (voiceName || 'Local Voice');
+      }
+      if (textEl) {
+        textEl.className = 'speaking-text';
+        textEl.textContent = text;
+      }
       if (waveEl) waveEl.classList.add('eq-active');
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -3074,14 +3081,23 @@ HTML_CONTENT = """<!DOCTYPE html>
         targetVoice = browserVoices.find(v => v.name === targetName || targetName.includes(v.name));
       }
       if (!targetVoice) {
-        const selectVal = document.getElementById('browser-voice-select').value;
+        const selectEl = document.getElementById('browser-voice-select');
+        const selectVal = selectEl ? selectEl.value : '';
         const idx = parseInt(selectVal);
         if (!isNaN(idx) && browserVoices[idx]) targetVoice = browserVoices[idx];
       }
       if (targetVoice) utterance.voice = targetVoice;
 
-      utterance.onend = finishPlay;
+      const safetyTimer = setTimeout(() => {
+        finishPlay();
+      }, Math.max(6000, text.length * 150));
+
+      utterance.onend = () => {
+        clearTimeout(safetyTimer);
+        finishPlay();
+      };
       utterance.onerror = (e) => {
+        clearTimeout(safetyTimer);
         console.error("SpeechSynthesis error:", e);
         finishPlay();
       };
@@ -3113,8 +3129,30 @@ HTML_CONTENT = """<!DOCTYPE html>
         const data = await res.json();
         if (data.status === 'ok') {
           if (data.is_piper && data.audio_b64) {
-            playPiperAudio({
-              user: "Voice Preview",
+            enqueueAudio({
+              type: 'piper',
+              data: {
+                user: "Voice Preview",
+                display: testPhrase,
+                audio_b64: data.audio_b64
+              }
+            });
+          } else {
+            enqueueAudio({
+              type: 'instant',
+              data: {
+                text: testPhrase,
+                voice: data.voice
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error("testActiveVoiceSample error:", err);
+      } finally {
+        setTimeout(() => {
+          if (icon) icon.textContent = "▶️";
+          if (txt) txt.textContent = "Play Sample of Selected Voice";
               display: testPhrase,
               audio_b64: data.audio_b64
             });
@@ -3229,9 +3267,9 @@ HTML_CONTENT = """<!DOCTYPE html>
       } else if (data.type === 'gift_chime') {
         playGiftChime();
       } else if (data.type === 'tts_instant') {
-        speakInstant(data.item);
+        enqueueAudio({ type: 'instant', data: data.item });
       } else if (data.type === 'tts_audio') {
-        playPiperAudio(data);
+        enqueueAudio({ type: 'piper', data: data });
       } else if (data.type === 'client_skip') {
         skipAudio();
       } else if (data.type === 'update_progress') {
@@ -3241,21 +3279,31 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     function finishPlay() {
-      isPlaying = false;
       activeAudio = null;
       const userEl = document.getElementById('spk-user');
       const textEl = document.getElementById('spk-text');
       const waveEl = document.getElementById('spk-wave');
-      userEl.style.display = 'none';
-      textEl.className = 'speaking-text speaking-idle';
-      textEl.textContent = 'No audio currently playing. Waiting for chat...';
+      if (userEl) userEl.style.display = 'none';
+      if (textEl) {
+        textEl.className = 'speaking-text speaking-idle';
+        textEl.textContent = 'No audio currently playing. Waiting for chat...';
+      }
       if (waveEl) waveEl.classList.remove('eq-active');
+
+      if (audioQueue.length > 0) {
+        setTimeout(processNextInQueue, 150);
+      } else {
+        isPlaying = false;
+        updateQueue(0);
+      }
     }
 
     function skipAudio() {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
       if (activeAudio) {
-        activeAudio.pause();
+        try { activeAudio.pause(); } catch (e) {}
         activeAudio = null;
       }
       finishPlay();
@@ -3360,13 +3408,22 @@ HTML_CONTENT = """<!DOCTYPE html>
         const data = await res.json();
         if (data.status === 'ok') {
           if (data.is_piper && data.audio_b64) {
-            playPiperAudio({
-              user: "Test User",
-              display: text,
-              audio_b64: data.audio_b64
+            enqueueAudio({
+              type: 'piper',
+              data: {
+                user: "Test User",
+                display: text,
+                audio_b64: data.audio_b64
+              }
             });
           } else if (!data.is_piper) {
-            speakSystemVoice(text, data.voice);
+            enqueueAudio({
+              type: 'instant',
+              data: {
+                text: text,
+                voice: data.voice
+              }
+            });
           }
         }
       } catch (e) {
@@ -3377,7 +3434,8 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     async function clearQueue() {
       audioQueue = [];
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      updateQueue(0);
+      skipAudio();
       await fetch('/api/clear-queue', { method: 'POST' });
     }
 
