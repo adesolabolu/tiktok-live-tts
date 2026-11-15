@@ -65,21 +65,33 @@ jobs:
             updater.py
           Copy-Item -Path "dist/updater.exe" -Destination "dist/TikTokLiveTTS/updater.exe"
 
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Build Inno Setup Installer (TikTokLiveTTS-Setup.exe)
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
       - name: Compress Executable into ZIP
         run: |
           powershell Compress-Archive -Path dist/TikTokLiveTTS -DestinationPath dist/TikTokLiveTTS-Windows.zip
 
-      - name: Upload Build Artifact
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: TikTokLiveTTS-Windows
-          path: dist/TikTokLiveTTS-Windows.zip
+          name: TikTokLiveTTS-Package
+          path: |
+            dist/TikTokLiveTTS-Setup.exe
+            dist/TikTokLiveTTS-Windows.zip
 
       - name: Release Executable on Tag
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/TikTokLiveTTS-Windows.zip
+          files: |
+            dist/TikTokLiveTTS-Setup.exe
+            dist/TikTokLiveTTS-Windows.zip
           draft: false
           prerelease: false
           generate_release_notes: true

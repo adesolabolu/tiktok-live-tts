@@ -47,7 +47,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.5.1"
+CURRENT_VERSION = "1.6.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -505,13 +505,54 @@ async def api_install_update():
                 return {"status": "error", "message": f"GitHub returned HTTP {resp.status_code}"}
             data = resp.json()
             assets = data.get("assets", [])
-            download_url = None
+            latest_tag = data.get("tag_name", "").lstrip("v")
+            setup_download_url = None
+            zip_download_url = None
             for asset in assets:
-                if asset.get("name") == "TikTokLiveTTS-Windows.zip":
-                    download_url = asset.get("browser_download_url")
-                    break
-            if not download_url:
-                return {"status": "error", "message": "No Windows executable ZIP found in latest release"}
+                aname = asset.get("name", "")
+                if aname == "TikTokLiveTTS-Setup.exe":
+                    setup_download_url = asset.get("browser_download_url")
+                elif aname == "TikTokLiveTTS-Windows.zip":
+                    zip_download_url = asset.get("browser_download_url")
+
+            # Route 1: Modern Single-File Setup Installer
+            if setup_download_url:
+                setup_dest = os.path.join(tempfile.gettempdir(), f"TikTokLiveTTS-Setup-{latest_tag}.exe")
+                await broadcast({"type": "update_progress", "status": "Downloading update installer (15%)...", "percent": 15})
+
+                async with client.stream("GET", setup_download_url, follow_redirects=True) as stream:
+                    total_bytes = int(stream.headers.get("content-length", 0))
+                    downloaded = 0
+                    with open(setup_dest, "wb") as f:
+                        async for chunk in stream.aiter_bytes():
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_bytes > 0:
+                                pct = int((downloaded / total_bytes) * 80) + 15
+                                await broadcast({"type": "update_progress", "status": f"Downloading installer ({pct}%)...", "percent": pct})
+
+                await broadcast({"type": "update_progress", "status": "Launching installer...", "percent": 100})
+
+                CREATE_NEW_PROCESS_GROUP = 0x00000200
+                # Inno Setup /SILENT displays the small installation progress window and restarts cleanly
+                subprocess.Popen(
+                    [setup_dest, "/SILENT", "/CLOSEAPPLICATIONS"],
+                    creationflags=CREATE_NEW_PROCESS_GROUP,
+                    close_fds=True
+                )
+
+                def do_exit_installer():
+                    time.sleep(0.6)
+                    os._exit(0)
+
+                threading.Thread(target=do_exit_installer, daemon=True).start()
+                return {"status": "ok", "message": "Launching installer..."}
+
+            # Route 2: Portable ZIP fallback
+            if not zip_download_url:
+                return {"status": "error", "message": "No installer or update package found in release"}
+
+            download_url = zip_download_url
 
             temp_dir = os.path.join(tempfile.gettempdir(), "tiktok_tts_update")
             os.makedirs(temp_dir, exist_ok=True)
