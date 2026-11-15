@@ -30,6 +30,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Download Piper Neural Engine Binary
+        run: |
+          python scripts/download_piper.py bin/piper
+
       - name: Compile to Standalone .exe with PyInstaller
         run: |
           pyinstaller --noconfirm --onedir --windowed --name "TikTokLiveTTS" `
@@ -56,6 +60,7 @@ jobs:
             --copy-metadata uvicorn `
             --add-data "icon.ico;." `
             --add-data "icon.png;." `
+            --add-data "bin/piper;bin/piper" `
             --add-data "app.py;." app.py
 
       - name: Compile Standalone GUI Updater with PyInstaller

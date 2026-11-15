@@ -38,6 +38,7 @@ import zipfile
 import shutil
 import subprocess
 import httpx
+import urllib.request
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -47,7 +48,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.7.0"
+CURRENT_VERSION = "1.8.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -61,6 +62,194 @@ else:
     BUNDLE_DIR = BASE_DIR
 
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
+VOICES_DIR = os.path.join(BASE_DIR, "voices")
+os.makedirs(VOICES_DIR, exist_ok=True)
+
+def get_piper_executable() -> Optional[str]:
+    candidates = [
+        os.path.join(BASE_DIR, "bin", "piper", "piper.exe"),
+        os.path.join(BUNDLE_DIR, "bin", "piper", "piper.exe"),
+        os.path.join(os.path.dirname(sys.executable), "bin", "piper", "piper.exe"),
+        os.path.join(BASE_DIR, "piper", "piper.exe"),
+        shutil.which("piper")
+    ]
+    for c in candidates:
+        if c and os.path.exists(c) and os.path.isfile(c):
+            return c
+    return None
+
+def ensure_piper_engine() -> bool:
+    exe = get_piper_executable()
+    if exe and os.path.exists(exe):
+        return True
+    dest_dir = os.path.join(BASE_DIR, "bin", "piper")
+    os.makedirs(dest_dir, exist_ok=True)
+    zip_url = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
+    try:
+        req = urllib.request.Request(zip_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp:
+            data = resp.read()
+        import io
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            for member in z.infolist():
+                fn = member.filename
+                if fn.startswith("piper/"):
+                    fn = fn[6:]
+                if not fn: continue
+                target = os.path.join(dest_dir, fn)
+                if member.is_dir():
+                    os.makedirs(target, exist_ok=True)
+                else:
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with open(target, "wb") as f:
+                        f.write(z.read(member))
+        return os.path.exists(os.path.join(dest_dir, "piper.exe"))
+    except Exception as e:
+        print(f"Failed to ensure piper engine: {e}")
+        return False
+
+PIPER_VOICE_CATALOG = {
+    "nova": {
+        "id": "nova",
+        "name": "Nova",
+        "subtitle": "High-Energy Anime Female",
+        "badge": "Anime / Hype",
+        "badgeStyle": "background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);",
+        "desc": "Expressive, cheerful, and fast-paced. Perfect for hype gaming and interactive chat reactions.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/amy/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx.json"
+    },
+    "kael": {
+        "id": "kael",
+        "name": "Kael",
+        "subtitle": "Deep FM Radio Announcer",
+        "badge": "Deep / Radio",
+        "badgeStyle": "background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);",
+        "desc": "Resonant, bass-heavy broadcast DJ voice. Ideal for chill late-night talk streams and podcasting.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/bryce/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/bryce/medium/en_US-bryce-medium.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/bryce/medium/en_US-bryce-medium.onnx.json"
+    },
+    "arthur": {
+        "id": "arthur",
+        "name": "Arthur",
+        "subtitle": "Distinguished British Butler",
+        "badge": "British / Formal",
+        "badgeStyle": "background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);",
+        "desc": "Polite, crisp UK English with formal tone. Reads chat comments with butler-like elegance.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_GB/alan/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/low/en_GB-alan-low.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/low/en_GB-alan-low.onnx.json"
+    },
+    "viper": {
+        "id": "viper",
+        "name": "Viper",
+        "subtitle": "Esports Shoutcaster",
+        "badge": "Gaming / FPS",
+        "badgeStyle": "background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);",
+        "desc": "Fast, hype tournament commentator style. Built for high-kill FPS and battle royale streams.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/ryan/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/low/en_US-ryan-low.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/low/en_US-ryan-low.onnx.json"
+    },
+    "luna": {
+        "id": "luna",
+        "name": "Luna",
+        "subtitle": "Calm & Cozy Storyteller",
+        "badge": "Cozy / ASMR",
+        "badgeStyle": "background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);",
+        "desc": "Soft, gentle, relaxing voice. Ideal for art streams, cozy farming games, and quiet evening streams.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/kathleen/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kathleen/low/en_US-kathleen-low.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kathleen/low/en_US-kathleen-low.onnx.json"
+    },
+    "thor": {
+        "id": "thor",
+        "name": "Thor",
+        "subtitle": "Nordic Warrior / Northern Male",
+        "badge": "Fantasy / Epic",
+        "badgeStyle": "background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);",
+        "desc": "Thunderous, roaring, epic character. Turns simple chat messages into battle declarations.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_GB/northern_english_male/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json"
+    }
+}
+
+def download_piper_voice(voice_id: str) -> bool:
+    v = PIPER_VOICE_CATALOG.get(voice_id)
+    if not v:
+        return False
+    target_dir = os.path.join(VOICES_DIR, voice_id)
+    os.makedirs(target_dir, exist_ok=True)
+    onnx_dest = os.path.join(target_dir, f"{voice_id}.onnx")
+    json_dest = os.path.join(target_dir, f"{voice_id}.onnx.json")
+
+    try:
+        req = urllib.request.Request(v["json_url"], headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp, open(json_dest, "wb") as f:
+            f.write(resp.read())
+
+        req = urllib.request.Request(v["onnx_url"], headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp, open(onnx_dest, "wb") as f:
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk: break
+                f.write(chunk)
+        return os.path.exists(onnx_dest) and os.path.getsize(onnx_dest) > 1000000
+    except Exception as e:
+        print(f"Error downloading voice {voice_id}: {e}")
+        return False
+
+def synthesize_piper(voice_id: str, text: str) -> Optional[str]:
+    piper_exe = get_piper_executable()
+    if not piper_exe or not os.path.exists(piper_exe):
+        return None
+    model_path = os.path.join(VOICES_DIR, voice_id, f"{voice_id}.onnx")
+    if not os.path.exists(model_path):
+        return None
+
+    piper_dir = os.path.dirname(piper_exe)
+    espeak_data = os.path.join(piper_dir, "espeak-ng-data")
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+        out_wav = tf.name
+
+    try:
+        args = [
+            piper_exe,
+            "--model", model_path,
+            "--output_file", out_wav
+        ]
+        if os.path.exists(espeak_data):
+            args.extend(["--espeak_data", espeak_data])
+
+        pinfo = subprocess.STARTUPINFO()
+        pinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        pinfo.wShowWindow = 0 # SW_HIDE
+
+        proc = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=piper_dir,
+            startupinfo=pinfo,
+            creationflags=0x08000000
+        )
+        proc.communicate(input=text.encode("utf-8"), timeout=10)
+
+        if os.path.exists(out_wav) and os.path.getsize(out_wav) > 1000:
+            with open(out_wav, "rb") as f:
+                return base64.b64encode(f.read()).decode("ascii")
+    except Exception as e:
+        print(f"Piper synthesis error: {e}")
+    finally:
+        if os.path.exists(out_wav):
+            try: os.remove(out_wav)
+            except Exception: pass
+    return None
 
 DEFAULT_CONFIG = {
     "username": "",
@@ -278,25 +467,44 @@ def check_filters(user, text: str) -> tuple[bool, str]:
     return True, clean_text
 
 async def handle_new_tts_item(user: str, raw_text: str, display_text: str, fan_level: int = 0):
+    voice_name = state.native_voice_name or ""
+    v_id = None
+    if voice_name.startswith("store:"):
+        v_id = voice_name.split(":")[1]
+    elif voice_name in state.installed_voices:
+        v_id = voice_name
+    elif any(voice_name.lower().startswith(v["name"].lower()) for v in PIPER_VOICE_CATALOG.values()):
+        for k, v in PIPER_VOICE_CATALOG.items():
+            if voice_name.lower().startswith(v["name"].lower()) and k in state.installed_voices:
+                v_id = k
+                break
+
+    if v_id and v_id in state.installed_voices:
+        loop = asyncio.get_event_loop()
+        b64 = await loop.run_in_executor(None, synthesize_piper, v_id, raw_text)
+        if b64:
+            await broadcast({
+                "type": "tts_audio",
+                "user": user,
+                "display": display_text,
+                "audio_b64": b64
+            })
+            return
+
     item = {
         "id": str(uuid.uuid4()),
         "user": user,
         "fan_level": fan_level,
         "text": raw_text,
         "display": display_text,
-        "engine": state.engine,
+        "engine": "instant",
         "voice": state.voice,
         "time": time.strftime("%H:%M:%S")
     }
-
-    if state.engine == "instant":
-        await broadcast({
-            "type": "tts_instant",
-            "item": item
-        })
-    else:
-        await state.tts_queue.put(item)
-        await broadcast({"type": "queue_size", "size": state.tts_queue.qsize()})
+    await broadcast({
+        "type": "tts_instant",
+        "item": item
+    })
 
 async def tiktok_runner(username: str):
     clean_user = username.lstrip("@").strip()
@@ -750,6 +958,57 @@ async def api_settings(req: SettingsRequest):
     return {
         "status": "ok",
         "config": state.export_config()
+    }
+
+class VoiceActionRequest(BaseModel):
+    voice_id: str
+
+@app.post("/api/install-voice")
+async def api_install_voice(req: VoiceActionRequest):
+    v_id = req.voice_id
+    if v_id not in PIPER_VOICE_CATALOG:
+        return {"status": "error", "message": f"Unknown voice {v_id}"}
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, ensure_piper_engine)
+    success = await loop.run_in_executor(None, download_piper_voice, v_id)
+    if not success:
+        return {"status": "error", "message": f"Failed to download voice files for {v_id}"}
+
+    if v_id not in state.installed_voices:
+        state.installed_voices.append(v_id)
+
+    state.native_voice_name = f"store:{v_id}"
+    save_config(state.export_config())
+    return {
+        "status": "ok",
+        "voice_id": v_id,
+        "installed_voices": state.installed_voices,
+        "active_voice": state.native_voice_name
+    }
+
+@app.post("/api/uninstall-voice")
+async def api_uninstall_voice(req: VoiceActionRequest):
+    v_id = req.voice_id
+    if v_id in state.installed_voices:
+        state.installed_voices.remove(v_id)
+
+    target_dir = os.path.join(VOICES_DIR, v_id)
+    if os.path.exists(target_dir):
+        try:
+            shutil.rmtree(target_dir)
+        except Exception as e:
+            print(f"Error removing {target_dir}: {e}")
+
+    if state.native_voice_name in [f"store:{v_id}", v_id]:
+        state.native_voice_name = ""
+
+    save_config(state.export_config())
+    return {
+        "status": "ok",
+        "voice_id": v_id,
+        "installed_voices": state.installed_voices,
+        "active_voice": state.native_voice_name
     }
 
 @app.websocket("/ws")
@@ -1490,7 +1749,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         badge: "Anime / Hype",
         badgeStyle: "background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);",
         desc: "Expressive, cheerful, and fast-paced. Perfect for hype gaming and interactive chat reactions.",
-        sample: "Hey chat! Thank you so much for the hype! Let's go!"
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/amy/medium/speaker_0.mp3"
       },
       {
         id: "kael",
@@ -1499,7 +1758,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         badge: "Deep / Radio",
         badgeStyle: "background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);",
         desc: "Resonant, bass-heavy broadcast DJ voice. Ideal for chill late-night talk streams and podcasting.",
-        sample: "Welcome in to the late night stream. Sit back, relax, and enjoy the vibe."
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/bryce/medium/speaker_0.mp3"
       },
       {
         id: "arthur",
@@ -1508,7 +1767,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         badge: "British / Formal",
         badgeStyle: "background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);",
         desc: "Polite, crisp UK English with formal tone. Reads chat comments with butler-like elegance.",
-        sample: "Good evening everyone. It is an absolute pleasure to be reading your comments."
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_GB/alan/medium/speaker_0.mp3"
       },
       {
         id: "viper",
@@ -1517,7 +1776,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         badge: "Gaming / FPS",
         badgeStyle: "background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);",
         desc: "Fast, hype tournament commentator style. Built for high-kill FPS and battle royale streams.",
-        sample: "Triple kill! Watch the flank! They cannot stop us right now!"
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/ryan/medium/speaker_0.mp3"
       },
       {
         id: "luna",
@@ -1526,16 +1785,16 @@ HTML_CONTENT = """<!DOCTYPE html>
         badge: "Cozy / ASMR",
         badgeStyle: "background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);",
         desc: "Soft, gentle, relaxing voice. Ideal for art streams, cozy farming games, and quiet evening streams.",
-        sample: "Welcome to our cozy stream today. I hope you're having a calm and wonderful day."
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/kathleen/medium/speaker_0.mp3"
       },
       {
         id: "thor",
         name: "Thor",
-        subtitle: "Nordic Warrior / Barbarian",
+        subtitle: "Nordic Warrior / Northern Male",
         badge: "Fantasy / Epic",
         badgeStyle: "background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);",
-        desc: "Thunderous, roaring, epic fantasy character. Turns simple chat messages into battle declarations.",
-        sample: "By the thunder gods! We march to victory! Bring on the battle!"
+        desc: "Thunderous, roaring, epic character. Turns simple chat messages into battle declarations.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_GB/northern_english_male/medium/speaker_0.mp3"
       }
     ];
 
@@ -1546,10 +1805,11 @@ HTML_CONTENT = """<!DOCTYPE html>
     let audioQueue = [];
     let isPlaying = false;
     let activeAudio = null;
+    let previewAudio = null;
+    let currentPreviewId = null;
     let browserVoices = [];
     let installedStoreVoices = [];
     let starredVoices = [];
-    let currentPreviewId = null;
     let latestReleaseNotes = "";
     let latestVersionStr = "";
 
@@ -1730,6 +1990,24 @@ HTML_CONTENT = """<!DOCTYPE html>
         const isInstalled = installedStoreVoices.includes(v.id);
         const isPlayingThis = (currentPreviewId === v.id);
 
+        let actionHtml = '';
+        if (isInstalled) {
+          actionHtml = `
+            <button class="btn-secondary" style="font-size: 11px; flex: 1; cursor: default;" disabled>
+              ✓ Installed (Offline)
+            </button>
+            <button class="btn-danger" style="font-size: 11px; padding: 6px 12px;" onclick="uninstallVoiceStore('${v.id}')">
+              🗑️ Uninstall
+            </button>
+          `;
+        } else {
+          actionHtml = `
+            <button class="btn-primary" style="font-size: 11px; flex: 1;" id="btn-install-${v.id}" onclick="installVoiceStore('${v.id}')">
+              ⬇️ Install (0ms Offline)
+            </button>
+          `;
+        }
+
         return `
           <div class="card" style="margin-bottom: 0; background: #0c1222; border: 1px solid ${isStarred ? '#f59e0b' : '#1e293b'}; position: relative; transition: border-color 0.2s;">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
@@ -1754,9 +2032,7 @@ HTML_CONTENT = """<!DOCTYPE html>
               <button class="btn-secondary" style="font-size: 11px; flex: 1;" onclick="togglePreviewVoice('${v.id}')">
                 ${isPlayingThis ? '⏸️ Pause Sample' : '▶️ Play Sample'}
               </button>
-              <button class="${isInstalled ? 'btn-secondary' : 'btn-primary'}" style="font-size: 11px; flex: 1;" id="btn-voice-${v.id}" onclick="installVoiceStore('${v.id}', '${v.name} (${v.subtitle})')">
-                ${isInstalled ? '✓ Installed' : '⬇️ Install (0ms Offline)'}
-              </button>
+              ${actionHtml}
             </div>
           </div>
         `;
@@ -1776,52 +2052,124 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     function togglePreviewVoice(vId) {
-      if (currentPreviewId === vId) {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-        }
+      if (currentPreviewId === vId && previewAudio) {
+        previewAudio.pause();
+        previewAudio = null;
         currentPreviewId = null;
         renderVoiceStoreGrid();
         return;
       }
 
-      if ('speechSynthesis' in window) {
+      if (previewAudio) {
+        previewAudio.pause();
+        previewAudio = null;
+      }
+      if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
 
       const v = STORE_CATALOG.find(c => c.id === vId);
-      if (!v) return;
+      if (!v || !v.sampleUrl) return;
 
       currentPreviewId = vId;
-      renderVoiceStoreGrid();
+      previewAudio = new Audio(v.sampleUrl);
+      previewAudio.volume = currentVolume;
+      if (selectedAudioDevice && previewAudio.setSinkId && selectedAudioDevice !== 'default') {
+        previewAudio.setSinkId(selectedAudioDevice).catch(() => {});
+      }
 
-      if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance(v.sample);
-        u.volume = currentVolume;
-        u.onend = () => {
-          if (currentPreviewId === vId) {
-            currentPreviewId = null;
-            renderVoiceStoreGrid();
-          }
-        };
-        u.onerror = () => {
-          if (currentPreviewId === vId) {
-            currentPreviewId = null;
-            renderVoiceStoreGrid();
-          }
-        };
-        speechSynthesis.speak(u);
+      previewAudio.onended = () => {
+        currentPreviewId = null;
+        previewAudio = null;
+        renderVoiceStoreGrid();
+      };
+      previewAudio.onerror = () => {
+        currentPreviewId = null;
+        previewAudio = null;
+        renderVoiceStoreGrid();
+      };
+
+      previewAudio.play().catch(e => {
+        console.error("Audio preview failed:", e);
+        currentPreviewId = null;
+        previewAudio = null;
+        renderVoiceStoreGrid();
+      });
+
+      renderVoiceStoreGrid();
+    }
+
+    async function installVoiceStore(vId) {
+      const btn = document.getElementById('btn-install-' + vId);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "⏳ Installing...";
+      }
+      try {
+        const res = await fetch('/api/install-voice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voice_id: vId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          if (!installedStoreVoices.includes(vId)) installedStoreVoices.push(vId);
+          savedNativeVoice = "store:" + vId;
+          renderVoiceStoreGrid();
+          populateBrowserVoices();
+        } else {
+          alert("Failed to install voice: " + (data.message || "Unknown error"));
+          renderVoiceStoreGrid();
+        }
+      } catch (e) {
+        alert("Install error: " + e);
+        renderVoiceStoreGrid();
       }
     }
 
-    function installVoiceStore(vId, vName) {
-      if (!installedStoreVoices.includes(vId)) {
-        installedStoreVoices.push(vId);
+    async function uninstallVoiceStore(vId) {
+      try {
+        const res = await fetch('/api/uninstall-voice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voice_id: vId })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          installedStoreVoices = installedStoreVoices.filter(id => id !== vId);
+          if (savedNativeVoice === "store:" + vId || savedNativeVoice === vId) {
+            savedNativeVoice = "";
+          }
+          renderVoiceStoreGrid();
+          populateBrowserVoices();
+        } else {
+          alert("Failed to uninstall voice: " + (data.message || "Unknown error"));
+        }
+      } catch (e) {
+        alert("Uninstall error: " + e);
       }
-      savedNativeVoice = vName;
-      renderVoiceStoreGrid();
-      populateBrowserVoices();
-      updateSettings();
+    }
+
+    function playPiperAudio(item) {
+      const userEl = document.getElementById('spk-user');
+      const textEl = document.getElementById('spk-text');
+      userEl.style.display = 'block';
+      userEl.textContent = '⚡ ' + item.user;
+      textEl.className = 'speaking-text';
+      textEl.textContent = item.display || item.text;
+
+      if (activeAudio) {
+        activeAudio.pause();
+        activeAudio = null;
+      }
+      activeAudio = new Audio("data:audio/wav;base64," + item.audio_b64);
+      if (activeAudio.setSinkId && selectedAudioDevice !== 'default') {
+        activeAudio.setSinkId(selectedAudioDevice).catch(() => {});
+      }
+      activeAudio.volume = currentVolume;
+      activeAudio.onended = finishPlay;
+      activeAudio.onerror = finishPlay;
+      activeAudio.play().catch(finishPlay);
     }
 
     if ('speechSynthesis' in window) {
@@ -1927,9 +2275,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       } else if (data.type === 'tts_instant') {
         speakInstant(data.item);
       } else if (data.type === 'tts_audio') {
-        audioQueue.push(data);
-        updateQueue(data.queue_size || audioQueue.length);
-        playNextCloud();
+        playPiperAudio(data);
       } else if (data.type === 'client_skip') {
         skipAudio();
       } else if (data.type === 'update_progress') {

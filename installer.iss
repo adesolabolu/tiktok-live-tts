@@ -1,6 +1,6 @@
 ; Inno Setup Script for TikTok Live TTS Studio
 #define MyAppName "TikTok Live TTS Studio"
-#define MyAppVersion "1.7.0"
+#define MyAppVersion "1.8.0"
 #define MyAppPublisher "Adesola Boluwatife"
 #define MyAppURL "https://github.com/adesolabolu/tiktok-live-tts"
 #define MyAppExeName "TikTokLiveTTS.exe"
@@ -35,6 +35,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "dist\TikTokLiveTTS\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "bin\piper\*"; DestDir: "{app}\bin\piper"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

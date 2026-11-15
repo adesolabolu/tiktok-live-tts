@@ -33,4 +33,5 @@ wheels/
 .DS_Store
 Thumbs.db
 bin/
+voices/
 config.json

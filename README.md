@@ -12,7 +12,7 @@ A high-performance, standalone Text-to-Speech (TTS) studio engineered specifical
 * **🎛️ 4-Tab Streamer Dashboard:**
   * **🎙️ Live TTS & Moderation:** Streamer controls, live chat monitor, manual speech trigger, anti-spam automute, and badge gating.
   * **🎬 TikTok Studio Overlay:** Custom subtitle display HUD, URL copy, and TikTok Live Studio setup guide.
-  * **🏪 Voice Store:** Offline neural character voice catalog with interactive **Play / Pause** audio preview toggles, **⭐ Star / Favorite** voice pinning to the top of your list, and 1-click installation.
+  * **🏪 Voice Store:** High-fidelity offline neural character voice catalog with authentic streaming audio previews (**Play / Pause**), **⭐ Star / Favorite** pinning to the top of your list, 1-click **Install**, and 1-click **Uninstall** to reclaim disk space anytime.
   * **⚙️ Settings & Audio Routing:** Audio device selector (`navigator.mediaDevices`), cooldown timers, and safety filters.
 * **🔒 Zero Credentials / Zero Login:** No TikTok password, session token, or official developer registration required.
 * **🛡️ Streamer Moderation & Safety:**
