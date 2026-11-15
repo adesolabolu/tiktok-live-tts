@@ -4,22 +4,42 @@ A high-performance, standalone Text-to-Speech (TTS) studio engineered specifical
 
 ---
 
-## ⚡ Key Highlights
+## ⚡ Key Highlights (v1.9.0)
 
 * **🚀 1-Click Windows Setup (`TikTokLiveTTS-Setup.exe`):** Single-file Inno Setup installer. Installs cleanly to your PC, creates Desktop & Start Menu shortcuts, and features seamless in-app auto-updating.
-* **⚡ Instant Zero-Lag Speech (<30ms):** Native hardware-accelerated speech synthesis directly through your system audio subsystem.
+* **🎨 Broadcast Studio UI Redesign:** Sleek obsidian dark-mode interface built to professional hardware studio standards. Features Emil Kowalski motion curves, tactile `:active` button compressions (`scale(0.97)`), real-time animated audio VU meter equalizers, hardware-styled toggle switches, and categorized activity feeds.
+* **⚡ Instant Zero-Lag Speech (<30ms):** 100% offline neural voice engine running locally on your computer with zero cloud latency or buffering.
+* **🏪 13 High-Fidelity Offline Neural Voices:**
+  * **Nova:** High-Energy Anime Female (Hype / Gaming)
+  * **Kael:** Deep FM Radio Announcer (Deep / Radio)
+  * **Arthur:** Distinguished British Butler (British / Formal)
+  * **Viper:** Esports Shoutcaster (FPS / Gaming)
+  * **Luna:** Calm & Cozy Storyteller (Cozy / ASMR)
+  * **Thor:** Nordic Warrior (Fantasy / Epic)
+  * **Danny:** Gamer / Teen Hype (US / Banter)
+  * **Lessac:** Studio Narrator / Pro Audiobook (US / Studio Clear)
+  * **Joe:** Chill Streamer / Casual Male (US / Conversational)
+  * **Kristin:** Warm & Cheerful Female (US / Friendly)
+  * **Mike:** Deep Baritone / Esports Caster (US / Deep Authority)
+  * **Alba:** Scottish Storyteller (Scottish / Character)
+  * **Cori:** British Queen's English (UK / Eloquent Royal)
+* **⭐ Voice Store Features:**
+  * **Authentic Streaming Previews:** Play / Pause sample audio before downloading.
+  * **Live Animated Equalizer:** Active sound wave bars visualize playback in real time.
+  * **Category Filter Pills & Live Search:** Instantly filter by Gaming, Deep, Chill, Warm, Accents, or search by name.
+  * **⭐ Pin to Top:** Star favorite voices to pin them to the top of the store and your stream dropdown.
+  * **1-Click Install & Uninstall:** Download models for 0ms CPU synthesis, or uninstall anytime to reclaim disk space.
 * **🎬 TikTok Live Studio Overlay (`/overlay`):** Dedicated transparent browser overlay HUD for TikTok Live Studio with animated live chat subtitles, fan badges, and gift announcements.
 * **🎛️ 4-Tab Streamer Dashboard:**
-  * **🎙️ Live TTS & Moderation:** Streamer controls, live chat monitor, manual speech trigger, anti-spam automute, badge gating, and a dedicated **`▶️ Play Sample of Selected Voice`** button for instant audio previewing.
+  * **🎙️ Live TTS & Moderation:** Streamer controls, live chat monitor, manual speech soundboard with 6 presets, anti-spam automute, fan club gating, and a dedicated **`▶️ Play Sample of Selected Voice`** button.
   * **🎬 TikTok Studio Overlay:** Custom subtitle display HUD, URL copy, and TikTok Live Studio setup guide.
-  * **🏪 Voice Store:** High-fidelity offline neural character voice catalog with authentic streaming audio previews (**Play / Pause**), **⭐ Star / Favorite** pinning to the top of your list, 1-click **Install**, and 1-click **Uninstall** to reclaim disk space anytime.
-  * **⚙️ Settings & Audio Routing:** Audio device selector (`navigator.mediaDevices`), cooldown timers, and safety filters.
-* **🔒 Zero Credentials / Zero Login:** No TikTok password, session token, or official developer registration required.
+  * **🏪 Voice Store (13 Voices):** Offline neural voice catalog with instant previews, filters, and star management.
+  * **⚙️ Settings & Audio Routing:** Audio device routing (`navigator.mediaDevices`), volume control, and software updates.
 * **🛡️ Streamer Moderation & Safety:**
   * **Command Prefix Filter:** Optionally require comments to begin with a trigger prefix (`.`, `/`, or `!`) before being spoken aloud, with automatic prefix stripping so only the message is read.
   * **Fan Club Level Gating:** Limit TTS to dedicated fans (e.g., Level 5+).
   * **Gifter Minimum Coins:** Limit gift announcements to gifts meeting coin thresholds.
-  * **Anti-Spam Auto-Mute:** Automatically silences users who repeat the same comment repeatedly.
+  * **Anti-Spam Auto-Mute:** Automatically silences users who repeat comments or spam chat.
   * **Panic Button:** Instant "Skip Message" and "Clear Queue" controls.
 * **🌐 Conflict-Free Port `28730`:** Runs on dedicated high-range port `28730` with an automatic scanner across ports 28730–28760 to guarantee zero collisions with local servers or dev tools.
 
@@ -40,7 +60,7 @@ Download the official standalone installer from the [GitHub Releases](https://gi
 Because TikTok Live TTS Studio plays audio directly through your Windows audio subsystem:
 
 1. **In TikTok Live Studio:** TikTok Live Studio captures your system / desktop audio by default. When the app speaks, your livestream audience hears it automatically.
-2. **Dedicated Audio Device Output:** If you use virtual audio cables (Voicemeeter, Elgato Wave Link, GoXLR), go to the **Settings** tab in the app and select your specific playback channel from the **Audio Output Device** dropdown.
+2. **Dedicated Audio Device Output:** If you use virtual audio cables (Voicemeeter, Elgato Wave Link, GoXLR, SteelSeries Sonar), go to the **Settings** tab in the app and select your specific playback channel from the **Audio Output Device** dropdown.
 3. **Headphones Recommended:** Wear headphones while streaming so your physical microphone does not pick up TTS playback from room speakers.
 
 ---
@@ -50,9 +70,9 @@ Because TikTok Live TTS Studio plays audio directly through your Windows audio s
 1. In the app, switch to the **🎬 TikTok Studio Overlay** tab.
 2. Click **"📋 Copy Overlay URL"** (e.g., `http://127.0.0.1:28730/overlay`).
 3. In **TikTok Live Studio**:
-   - Click **Add Source** ➔ **Link / Browser**.
+   - Click **Add Source** ➔ **Link / Browser Source**.
    - Paste the copied URL into the URL field.
-   - Set Dimensions to **1920 × 1080**.
+   - Set Dimensions to **Width: 850**, **Height: 250**.
 4. The transparent subtitles and gift alerts will now render on top of your stream video with zero background blockout!
 
 ---
@@ -60,10 +80,11 @@ Because TikTok Live TTS Studio plays audio directly through your Windows audio s
 ## 🛠️ Tech Stack
 
 * **Core Backend:** Python, FastAPI, Uvicorn, WebSockets
+* **Local Neural Speech:** Piper TTS (0ms local ONNX inference)
 * **Livestream Connection:** [TikTokLive](https://github.com/isaackogan/TikTokLive) (Webcast WebSocket Client)
 * **Desktop UI & Windowing:** [pywebview](https://pywebview.flowrl.com/) + WinForms WebView2 runtime
 * **Installer Engine:** [Inno Setup 6](https://jrsoftware.org/isinfo.php)
-* **Frontend:** Dark-mode Vanilla HTML5, CSS3, Modern ES6+ WebSockets
+* **Frontend:** Modern Obsidian Dark UI, Hardware Switch Controls, ES6+ WebSockets, CSS3 Motion Curves
 
 ---
 

@@ -48,7 +48,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.8.1"
+CURRENT_VERSION = "1.9.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -114,6 +114,7 @@ PIPER_VOICE_CATALOG = {
         "name": "Nova",
         "subtitle": "High-Energy Anime Female",
         "badge": "Anime / Hype",
+        "category": "gaming",
         "badgeStyle": "background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);",
         "desc": "Expressive, cheerful, and fast-paced. Perfect for hype gaming and interactive chat reactions.",
         "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/amy/medium/speaker_0.mp3",
@@ -125,6 +126,7 @@ PIPER_VOICE_CATALOG = {
         "name": "Kael",
         "subtitle": "Deep FM Radio Announcer",
         "badge": "Deep / Radio",
+        "category": "deep",
         "badgeStyle": "background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);",
         "desc": "Resonant, bass-heavy broadcast DJ voice. Ideal for chill late-night talk streams and podcasting.",
         "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/bryce/medium/speaker_0.mp3",
@@ -136,6 +138,7 @@ PIPER_VOICE_CATALOG = {
         "name": "Arthur",
         "subtitle": "Distinguished British Butler",
         "badge": "British / Formal",
+        "category": "accents",
         "badgeStyle": "background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);",
         "desc": "Polite, crisp UK English with formal tone. Reads chat comments with butler-like elegance.",
         "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_GB/alan/medium/speaker_0.mp3",
@@ -147,6 +150,7 @@ PIPER_VOICE_CATALOG = {
         "name": "Viper",
         "subtitle": "Esports Shoutcaster",
         "badge": "Gaming / FPS",
+        "category": "gaming",
         "badgeStyle": "background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);",
         "desc": "Fast, hype tournament commentator style. Built for high-kill FPS and battle royale streams.",
         "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/ryan/medium/speaker_0.mp3",
@@ -158,6 +162,7 @@ PIPER_VOICE_CATALOG = {
         "name": "Luna",
         "subtitle": "Calm & Cozy Storyteller",
         "badge": "Cozy / ASMR",
+        "category": "chill",
         "badgeStyle": "background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);",
         "desc": "Soft, gentle, relaxing voice. Ideal for art streams, cozy farming games, and quiet evening streams.",
         "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/kathleen/medium/speaker_0.mp3",
@@ -169,11 +174,96 @@ PIPER_VOICE_CATALOG = {
         "name": "Thor",
         "subtitle": "Nordic Warrior / Northern Male",
         "badge": "Fantasy / Epic",
+        "category": "accents",
         "badgeStyle": "background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);",
         "desc": "Thunderous, roaring, epic character. Turns simple chat messages into battle declarations.",
         "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_GB/northern_english_male/medium/speaker_0.mp3",
         "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx",
         "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json"
+    },
+    "danny": {
+        "id": "danny",
+        "name": "Danny",
+        "subtitle": "Gamer / Teen Hype",
+        "badge": "US / Teen Hype",
+        "category": "gaming",
+        "badgeStyle": "background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3);",
+        "desc": "Youthful, energetic US English voice. Awesome for gaming banter, fast-paced stream hype, and jokes.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/danny/low/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/danny/low/en_US-danny-low.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/danny/low/en_US-danny-low.onnx.json"
+    },
+    "lessac": {
+        "id": "lessac",
+        "name": "Lessac",
+        "subtitle": "Studio Narrator / Pro Audiobook",
+        "badge": "US / Studio Clear",
+        "category": "chill",
+        "badgeStyle": "background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3);",
+        "desc": "Pristine, neutral, studio-grade narration voice. Flawlessly clear pronunciation for reading long questions and viewer tips.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/lessac/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx.json"
+    },
+    "joe": {
+        "id": "joe",
+        "name": "Joe",
+        "subtitle": "Chill Streamer / Casual Male",
+        "badge": "US / Casual Chill",
+        "category": "chill",
+        "badgeStyle": "background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);",
+        "desc": "Laid-back, conversational everyday guy. Feels like a stream co-host chatting on Discord.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/joe/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/joe/medium/en_US-joe-medium.onnx.json"
+    },
+    "kristin": {
+        "id": "kristin",
+        "name": "Kristin",
+        "subtitle": "Warm & Cheerful Female",
+        "badge": "US / Warm & Friendly",
+        "category": "warm",
+        "badgeStyle": "background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);",
+        "desc": "Friendly, inviting, and upbeat female voice. Great for welcome greetings and donor thank-yous.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/kristin/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium.onnx.json"
+    },
+    "mike": {
+        "id": "mike",
+        "name": "Mike",
+        "subtitle": "Deep Baritone / Esports Caster",
+        "badge": "US / Deep Caster",
+        "category": "deep",
+        "badgeStyle": "background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3);",
+        "desc": "Deep, authoritative, cinematic male baritone. Gives substantial punch and weight to stream commentary.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_US/mike/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/mike/medium/en_US-mike-medium.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/mike/medium/en_US-mike-medium.onnx.json"
+    },
+    "alba": {
+        "id": "alba",
+        "name": "Alba",
+        "subtitle": "Scottish Storyteller Female",
+        "badge": "Scottish / Character",
+        "category": "accents",
+        "badgeStyle": "background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);",
+        "desc": "Distinctive Scottish accent with lyrical warmth and charm. Captivating character voice for roleplay and storytelling.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_GB/alba/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx.json"
+    },
+    "cori": {
+        "id": "cori",
+        "name": "Cori",
+        "subtitle": "British Queen's English Female",
+        "badge": "UK / Royal Eloquent",
+        "category": "accents",
+        "badgeStyle": "background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3);",
+        "desc": "Crisp, pristine Received Pronunciation British female. Highly articulate, elegant, and sophisticated.",
+        "sampleUrl": "https://rhasspy.github.io/piper-samples/samples/en/en_GB/cori/medium/speaker_0.mp3",
+        "onnx_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/cori/medium/en_GB-cori-medium.onnx",
+        "json_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/cori/medium/en_GB-cori-medium.onnx.json"
     }
 }
 
@@ -1074,471 +1164,829 @@ HTML_CONTENT = """<!DOCTYPE html>
   <title>TikTok Live TTS Studio</title>
   <style>
     :root {
-      --bg-dark: #0a0e17;
-      --card-bg: #131b2e;
-      --card-border: #1e293b;
-      --accent-primary: #10b981;
+      --bg-canvas: #080c14;
+      --bg-surface: #0f172a;
+      --bg-surface-elevated: #131d36;
+      --bg-surface-hover: #192543;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-elevated: rgba(255, 255, 255, 0.14);
+      --border-focus: #06b6d4;
       --accent-cyan: #06b6d4;
-      --accent-danger: #ef4444;
-      --accent-gold: #f59e0b;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
+      --accent-cyan-glow: rgba(6, 182, 212, 0.25);
+      --accent-emerald: #10b981;
+      --accent-emerald-glow: rgba(16, 185, 129, 0.25);
+      --accent-amber: #f59e0b;
+      --accent-amber-glow: rgba(245, 158, 11, 0.25);
+      --accent-violet: #8b5cf6;
+      --accent-violet-glow: rgba(139, 92, 246, 0.25);
+      --accent-rose: #f43f5e;
+      --accent-rose-glow: rgba(244, 63, 94, 0.25);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-tertiary: #64748b;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-press: cubic-bezier(0.4, 0, 0.2, 1);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg-dark);
-      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      background: var(--bg-canvas);
+      color: var(--text-primary);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      user-select: none;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
+
+    /* Studio Header */
     header {
-      background: #0f172a;
-      border-bottom: 1px solid var(--card-border);
+      background: #090e1a;
+      border-bottom: 1px solid var(--border-subtle);
       padding: 12px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(16px);
     }
-    .logo-group { display: flex; align-items: center; gap: 12px; }
-    .logo-icon { font-size: 24px; }
-    .logo-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-    .version-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #1e293b; color: #94a3b8; font-weight: 600; margin-left: 4px; }
-    .header-badges { display: flex; gap: 10px; align-items: center; }
-    .badge {
-      display: inline-flex;
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon-box {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.35);
+      flex-shrink: 0;
+      font-size: 18px;
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: #fff;
+      display: flex;
       align-items: center;
       gap: 8px;
-      padding: 5px 12px;
-      border-radius: 999px;
+    }
+    .version-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+    }
+    .telemetry-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .telemetry-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
       font-size: 12px;
       font-weight: 600;
-      background: #1e293b;
-      color: var(--text-muted);
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
     }
-    .badge.connected { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge.offline { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-    .badge.connecting { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-    .badge.latency { background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .telemetry-badge.connected {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.35);
+    }
+    .telemetry-badge.offline {
+      background: rgba(244, 63, 94, 0.12);
+      color: #fb7185;
+      border-color: rgba(244, 63, 94, 0.35);
+    }
+    .telemetry-badge.connecting {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+    .telemetry-badge.latency {
+      background: rgba(6, 182, 212, 0.1);
+      color: #38bdf8;
+      border-color: rgba(6, 182, 212, 0.3);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .status-dot.pulse {
+      animation: pulseStatus 2s infinite;
+    }
+    @keyframes pulseStatus {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
 
-    /* Compact Update Pill in Header */
+    /* Update Notification Pill */
     .update-pill {
-      display: inline-flex;
+      display: none;
       align-items: center;
       gap: 8px;
-      padding: 5px 14px;
-      border-radius: 999px;
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
       font-size: 12px;
       font-weight: 700;
       background: linear-gradient(90deg, #1e40af, #0284c7);
       color: #fff;
       border: 1px solid #38bdf8;
       cursor: pointer;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
       animation: pulseGlow 2.5s infinite;
-      transition: transform 0.2s;
+      transition: transform 120ms var(--ease-press);
     }
-    .update-pill:hover { transform: scale(1.04); }
+    .update-pill:hover { transform: scale(1.03); }
+    .update-pill:active { transform: scale(0.97); }
     .update-pulse { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; }
     @keyframes pulseGlow {
       0%, 100% { box-shadow: 0 0 8px rgba(56, 189, 248, 0.4); }
       50% { box-shadow: 0 0 16px rgba(56, 189, 248, 0.8); }
     }
 
-    /* Tabbed Navigation Bar */
+    /* Segmented Navigation Bar */
     .nav-bar {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       padding: 0 28px;
-      background: #0f172a;
-      border-bottom: 1px solid var(--card-border);
+      background: #090e1a;
+      border-bottom: 1px solid var(--border-subtle);
+      overflow-x: auto;
     }
     .nav-tab {
-      padding: 12px 18px;
+      padding: 13px 20px;
       background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 8px;
-      transition: all 0.2s;
+      transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+      white-space: nowrap;
     }
-    .nav-tab:hover { color: #fff; }
+    .nav-tab:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.03);
+    }
     .nav-tab.active {
       color: var(--accent-cyan);
       border-bottom-color: var(--accent-cyan);
-      background: rgba(6, 182, 212, 0.05);
+      background: rgba(6, 182, 212, 0.06);
     }
-    .tab-content { display: none; padding: 20px 28px; flex: 1; max-width: 1500px; margin: 0 auto; width: 100%; }
-    .tab-content.active { display: block; }
+    .nav-tab:active {
+      transform: scale(0.98);
+    }
+    .tab-content {
+      display: none;
+      padding: 22px 28px;
+      flex: 1;
+      max-width: 1540px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .tab-content.active {
+      display: block;
+      animation: tabFadeIn 220ms var(--ease-out);
+    }
+    @keyframes tabFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
 
-    /* Layout Containers */
+    /* Grid & Cards */
     .two-col-grid {
       display: grid;
-      grid-template-columns: 440px 1fr;
-      gap: 20px;
+      grid-template-columns: 460px 1fr;
+      gap: 22px;
     }
     .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 18px;
-      margin-bottom: 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      margin-bottom: 18px;
+      transition: border-color 150ms ease;
+    }
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
     }
     .card-title {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
-      text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: var(--accent-cyan);
-      margin-bottom: 12px;
+      color: #cbd5e1;
+      margin-bottom: 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+    .card-title-accent {
+      color: var(--accent-cyan);
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .helper-text {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+    .helper-text-success {
+      color: #34d399;
+    }
+
+    /* Inputs & Form Elements */
     input[type="text"], input[type="number"], select {
       width: 100%;
-      background: #090d16;
-      border: 1px solid #2d3748;
-      border-radius: 7px;
-      padding: 9px 12px;
+      background: #070b13;
+      border: 1px solid #1e293b;
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
       color: #fff;
       font-size: 13px;
       outline: none;
-      transition: border 0.2s;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
     }
-    input[type="text"]:focus, select:focus { border-color: var(--accent-primary); }
-    .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+    }
+    .input-prefix-box {
+      display: flex;
+      align-items: center;
+      background: #070b13;
+      border: 1px solid #1e293b;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .input-prefix-box:focus-within {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+    }
+    .input-prefix-label {
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--accent-cyan);
+      font-weight: 700;
+      font-size: 14px;
+      border-right: 1px solid #1e293b;
+    }
+    .input-prefix-box input {
+      border: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
     button {
-      flex: 1;
-      padding: 9px 14px;
-      border-radius: 7px;
+      padding: 10px 16px;
+      border-radius: var(--radius-md);
       border: none;
       font-weight: 600;
       font-size: 13px;
       cursor: pointer;
-      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 120ms var(--ease-press), background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
     }
-    .btn-primary { background: var(--accent-primary); color: #000; }
-    .btn-primary:hover { background: #059669; }
-    .btn-danger { background: var(--accent-danger); color: #fff; }
-    .btn-danger:hover { background: #dc2626; }
-    .btn-secondary { background: #1e293b; color: #fff; }
-    .btn-secondary:hover { background: #334155; }
-
-    /* Engine Toggle */
-    .engine-toggle {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-      background: #090d16;
-      padding: 4px;
-      border-radius: 8px;
-      border: 1px solid #2d3748;
-      margin-bottom: 14px;
+    button:active {
+      transform: scale(0.97);
     }
-    .engine-option {
-      padding: 7px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      text-align: center;
-      cursor: pointer;
-      color: var(--text-muted);
-      transition: all 0.2s;
+    .btn-primary {
+      background: var(--accent-emerald);
+      color: #061e14;
+      font-weight: 700;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
     }
-    .engine-option.active {
-      background: var(--accent-primary);
-      color: #000;
-      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+    .btn-primary:hover {
+      background: #059669;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
     }
-
-    /* Preset Chips */
-    .preset-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 10px 0;
-    }
-    .chip {
+    .btn-secondary {
       background: #1e293b;
-      border: 1px solid #334155;
-      color: #f1f5f9;
-      font-size: 11px;
-      padding: 5px 10px;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
+      color: var(--text-primary);
+      border: 1px solid var(--border-subtle);
     }
-    .chip:hover {
-      background: var(--accent-cyan);
-      color: #000;
-      border-color: var(--accent-cyan);
+    .btn-secondary:hover {
+      background: #27354f;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.18);
+      color: #fb7185;
+      border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+    .btn-danger:hover {
+      background: rgba(244, 63, 94, 0.28);
+      color: #fff;
     }
 
-    /* Checkbox rows */
+    /* Hardware Switch Styling */
     .toggle-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      padding: 4px 0;
     }
-    .toggle-row label { margin-bottom: 0; cursor: pointer; }
-    input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--accent-primary);
+    .toggle-row label {
+      margin-bottom: 0;
       cursor: pointer;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 42px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #1e293b;
+      border: 1px solid #334155;
+      transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      border-radius: 999px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #94a3b8;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      border-radius: 50%;
+    }
+    .switch input:checked + .slider {
+      background-color: rgba(16, 185, 129, 0.25);
+      border-color: #10b981;
+    }
+    .switch input:checked + .slider:before {
+      transform: translateX(18px);
+      background-color: #10b981;
     }
 
-    /* Speaking Display Card */
+    /* Preset Soundboard Chips */
+    .preset-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 10px 0 14px 0;
+    }
+    .chip {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: #e2e8f0;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      transition: all 150ms ease;
+      white-space: nowrap;
+    }
+    .chip:hover {
+      background: rgba(6, 182, 212, 0.15);
+      color: #38bdf8;
+      border-color: rgba(6, 182, 212, 0.4);
+    }
+    .chip:active {
+      transform: scale(0.96);
+    }
+    .chip.active {
+      background: var(--accent-cyan);
+      color: #042f2e;
+      font-weight: 700;
+      border-color: var(--accent-cyan);
+    }
+
+    /* Dynamic Equalizer Wave Bars */
+    .equalizer-wave {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 18px;
+    }
+    .eq-bar {
+      width: 3px;
+      background: var(--accent-cyan);
+      border-radius: 2px;
+      height: 4px;
+      transition: height 150ms ease;
+    }
+    .eq-active .eq-bar {
+      animation: eqBounce 0.7s ease-in-out infinite alternate;
+    }
+    .eq-active .eq-bar:nth-child(2) {
+      animation-delay: 0.15s;
+      height: 14px;
+      background: #10b981;
+    }
+    .eq-active .eq-bar:nth-child(3) {
+      animation-delay: 0.35s;
+      height: 18px;
+      background: #38bdf8;
+    }
+    .eq-active .eq-bar:nth-child(4) {
+      animation-delay: 0.2s;
+      height: 10px;
+      background: #06b6d4;
+    }
+    .eq-active .eq-bar:nth-child(5) {
+      animation-delay: 0.45s;
+      height: 16px;
+      background: #10b981;
+    }
+    @keyframes eqBounce {
+      0% { height: 4px; }
+      100% { height: 18px; }
+    }
+
+    /* Studio VU Deck / Now Speaking */
     .now-speaking-card {
-      background: linear-gradient(135deg, #131b2e 0%, #172554 100%);
-      border: 1px solid #1e3a8a;
+      background: linear-gradient(135deg, #0e172a 0%, #152238 100%);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
     }
     .speaking-display {
-      min-height: 80px;
+      min-height: 88px;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      background: rgba(0, 0, 0, 0.35);
-      border-radius: 9px;
-      padding: 12px 16px;
-      margin-bottom: 10px;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
     }
-    .speaking-user { font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 3px; }
-    .speaking-text { font-size: 17px; font-weight: 500; color: #fff; line-height: 1.4; }
-    .speaking-idle { color: var(--text-muted); font-style: italic; font-size: 13px; }
+    .speaking-user {
+      font-size: 13px;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .speaking-text {
+      font-size: 17px;
+      font-weight: 500;
+      color: #fff;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .speaking-idle {
+      color: var(--text-tertiary);
+      font-style: italic;
+      font-size: 13px;
+    }
 
-    /* Live activity log */
+    /* Live Stream Feed */
     .log-container {
-      background: #090d16;
+      background: #070b13;
       border: 1px solid #1e293b;
-      border-radius: 9px;
-      height: 520px;
+      border-radius: var(--radius-md);
+      height: 540px;
       overflow-y: auto;
-      padding: 10px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 7px;
+    }
+    .log-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .log-container::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
     }
     .log-item {
-      padding: 7px 11px;
-      border-radius: 6px;
-      background: #111827;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.05);
       font-size: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
+      animation: logSlide 180ms var(--ease-out);
     }
-    .log-item.gift { border-left: 3px solid var(--accent-gold); background: rgba(245, 158, 11, 0.08); }
-    .log-item.sub { border-left: 3px solid #a855f7; background: rgba(168, 85, 247, 0.08); }
-    .log-item.fan { border-left: 3px solid #f59e0b; background: rgba(245, 158, 11, 0.12); }
-    .log-item.blocked { opacity: 0.55; border-left: 3px solid var(--accent-danger); }
+    @keyframes logSlide {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .log-item.gift {
+      border-left: 3px solid var(--accent-amber);
+      background: rgba(245, 158, 11, 0.08);
+    }
+    .log-item.sub {
+      border-left: 3px solid var(--accent-violet);
+      background: rgba(139, 92, 246, 0.08);
+    }
+    .log-item.fan {
+      border-left: 3px solid #f59e0b;
+      background: rgba(245, 158, 11, 0.12);
+    }
+    .log-item.blocked {
+      opacity: 0.5;
+      border-left: 3px solid var(--accent-rose);
+    }
     .badge-fan {
       display: inline-block;
       background: #f59e0b;
       color: #000;
       font-size: 9px;
       font-weight: 800;
-      padding: 1px 5px;
+      padding: 2px 6px;
       border-radius: 4px;
       margin-right: 6px;
-      vertical-align: middle;
     }
-    .log-user { font-weight: 600; color: #38bdf8; margin-right: 6px; }
-    .log-text { color: #f1f5f9; }
-    .log-time { font-size: 11px; color: #64748b; margin-left: 10px; white-space: nowrap; }
+    .log-user {
+      font-weight: 700;
+      color: #38bdf8;
+      margin-right: 6px;
+    }
+    .log-text {
+      color: #f1f5f9;
+    }
+    .log-time {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      font-family: ui-monospace, monospace;
+    }
 
-    /* Soundwave Equalizer */
-    .equalizer {
+    /* Voice Store Catalog Styles */
+    .store-filter-bar {
       display: flex;
-      align-items: flex-end;
-      gap: 3px;
-      height: 20px;
-      min-width: 18px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
     }
-    .bar {
-      width: 3px;
-      background: #38bdf8;
-      border-radius: 2px;
-      animation: bounce 0.8s ease-in-out infinite alternate;
+    .store-search-box {
+      max-width: 280px;
+      min-width: 200px;
     }
-    .bar:nth-child(2) { animation-delay: 0.2s; height: 14px; background: #06b6d4; }
-    .bar:nth-child(3) { animation-delay: 0.4s; height: 20px; background: #10b981; }
-    .bar:nth-child(4) { animation-delay: 0.1s; height: 10px; background: #38bdf8; }
-    @keyframes bounce { 0% { height: 4px; } 100% { height: 20px; } }
+    .voice-card {
+      background: #0b1120;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      transition: transform 150ms var(--ease-out), border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .voice-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    .voice-card.starred {
+      border-color: rgba(245, 158, 11, 0.5);
+      background: linear-gradient(180deg, #101728 0%, #0c1220 100%);
+    }
+    .voice-badge-tag {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: var(--radius-full);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .star-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-secondary);
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 120ms ease;
+    }
+    .star-btn:hover {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.4);
+      color: #f59e0b;
+    }
+    .star-btn.active {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: #f59e0b;
+      color: #f59e0b;
+      font-weight: 700;
+    }
 
-    /* In-App What's New Modal */
+    /* Modal */
     .modal-backdrop {
+      display: none;
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(6px);
-      display: flex;
+      backdrop-filter: blur(8px);
+      z-index: 100;
       align-items: center;
       justify-content: center;
-      z-index: 9999;
-    }
-    .modal-card {
-      background: #0f172a;
-      border: 1px solid #1e3a8a;
-      border-radius: 14px;
-      width: 90%;
-      max-width: 520px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(56, 189, 248, 0.2);
-      overflow: hidden;
-      animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes modalPop {
-      0% { opacity: 0; transform: scale(0.95); }
-      100% { opacity: 1; transform: scale(1); }
-    }
-    .modal-header {
-      padding: 16px 20px;
-      background: #131b2e;
-      border-bottom: 1px solid var(--card-border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .modal-close {
-      background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 6px;
-    }
-    .modal-close:hover { color: #fff; background: #1e293b; }
-    .modal-body {
       padding: 20px;
-      font-size: 13px;
-      color: #cbd5e1;
-      line-height: 1.6;
-      max-height: 320px;
-      overflow-y: auto;
     }
-    .modal-body ul { margin-left: 20px; margin-top: 8px; }
-    .modal-body li { margin-bottom: 6px; }
-    .modal-footer {
-      padding: 14px 20px;
-      background: #0b1120;
-      border-top: 1px solid var(--card-border);
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
+    .modal-box {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      max-width: 500px;
+      width: 100%;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      animation: modalScale 200ms var(--ease-out);
+    }
+    @keyframes modalScale {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
     }
 
-    /* Footer Legal Disclaimer */
+    /* Footer */
     footer {
-      background: #090d16;
-      border-top: 1px solid var(--card-border);
-      padding: 10px 28px;
+      margin-top: auto;
+      border-top: 1px solid var(--border-subtle);
+      background: #080c14;
+      padding: 12px 28px;
       font-size: 11px;
-      color: #64748b;
+      color: var(--text-tertiary);
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, .slider, .nav-tab, .voice-card, button {
+        animation: none !important;
+        transition: none !important;
+      }
     }
   </style>
 </head>
 <body>
-  <!-- In-App What's New Modal -->
-  <div id="update-modal" class="modal-backdrop" style="display: none;">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 22px;">🚀</span>
-          <div>
-            <div id="modal-title" style="font-size: 16px; font-weight: 700; color: #fff;">Update Available</div>
-            <div id="modal-subtitle" style="font-size: 12px; color: #94a3b8;">TikTok Live TTS Studio</div>
-          </div>
-        </div>
-        <button class="modal-close" onclick="closeUpdateModal()">✕</button>
-      </div>
-      <div class="modal-body" id="modal-changelog">
-        Loading release details...
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" style="flex: 0 0 100px;" onclick="closeUpdateModal()">Later</button>
-        <button id="modal-update-btn" class="btn-primary" onclick="installUpdate()">⚡ Update & Restart Now</button>
-      </div>
-    </div>
-  </div>
 
+  <!-- Top Studio Header -->
   <header>
-    <div class="logo-group">
-      <span class="logo-icon">🎙️</span>
-      <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.4.0</span>
-    </div>
-    <div class="header-badges">
-      <button id="update-pill" class="update-pill" style="display: none;" onclick="openUpdateModal()">
-        <span class="update-pulse"></span>
-        <span id="update-pill-text">v1.4.1 Update Ready</span>
-      </button>
-      <div id="latency-badge" class="badge latency">
-        <span>⚡ Real-Time Mode (&lt;50ms)</span>
+    <div class="brand-group">
+      <div class="brand-icon-box">⚡</div>
+      <div>
+        <div class="brand-title">
+          <span>TikTok Live TTS Studio</span>
+          <span class="version-pill" id="app-version">v1.9.0</span>
+        </div>
       </div>
-      <div id="status-badge" class="badge">
-        <span class="dot"></span>
-        <span id="status-text">Disconnected</span>
+    </div>
+
+    <div class="telemetry-strip">
+      <button id="update-pill" class="update-pill" onclick="openUpdateModal()">
+        <span class="update-pulse"></span>
+        <span id="update-pill-text">v1.9.0 Ready</span>
+      </button>
+      <div id="latency-badge" class="telemetry-badge latency">
+        <span>⚡ 0ms Offline CPU Engine</span>
+      </div>
+      <div id="status-badge" class="telemetry-badge offline">
+        <span class="status-dot"></span>
+        <span id="status-text">DISCONNECTED</span>
       </div>
     </div>
   </header>
 
-  <!-- Tabbed Navigation Bar -->
+  <!-- Segmented Navigation Controller -->
   <div class="nav-bar">
     <button id="nav-btn-tts" class="nav-tab active" onclick="switchTab('tts')">🎙️ Live TTS & Moderation</button>
     <button id="nav-btn-overlay" class="nav-tab" onclick="switchTab('overlay')">📺 TikTok Studio Overlay</button>
-    <button id="nav-btn-store" class="nav-tab" onclick="switchTab('store')">🏪 Voice Store (Offline 0ms)</button>
+    <button id="nav-btn-store" class="nav-tab" onclick="switchTab('store')">🏪 Voice Store (13 Offline Voices)</button>
     <button id="nav-btn-settings" class="nav-tab" onclick="switchTab('settings')">⚙️ Settings & Audio Routing</button>
   </div>
 
   <!-- TAB 1: Live TTS & Moderation -->
   <div id="tab-tts" class="tab-content active">
     <div class="two-col-grid">
-      <!-- Left Column: Controls -->
+      <!-- Left Column: Streamer Deck Controls -->
       <div>
         <!-- 1. Connection Card -->
         <div class="card">
-          <div class="card-title">Stream Connection</div>
-          <label>TikTok @Username (Auto-Saved)</label>
-          <input type="text" id="username-input" placeholder="e.g. your_username" />
-          <div class="btn-row">
-            <button class="btn-primary" onclick="connectStream()">Connect</button>
-            <button class="btn-secondary" onclick="disconnectStream()">Disconnect</button>
+          <div class="card-title">
+            <span>Stream Connection</span>
+            <span style="font-size: 11px; color: var(--text-tertiary);">Direct Webhook</span>
           </div>
-          <p id="status-msg" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></p>
+          <label>TikTok @Username</label>
+          <div class="input-prefix-box">
+            <span class="input-prefix-label">@</span>
+            <input type="text" id="username-input" placeholder="your_tiktok_handle" />
+          </div>
+          <div class="btn-row">
+            <button class="btn-primary" style="flex: 2;" onclick="connectStream()">Go Live / Connect</button>
+            <button class="btn-secondary" style="flex: 1;" onclick="disconnectStream()">Disconnect</button>
+          </div>
+          <p id="status-msg" class="helper-text"></p>
         </div>
 
         <!-- 2. Voice Selection Card -->
         <div class="card">
-          <div class="card-title">Speech Voice</div>
-          <label>Selected Voice (Zero-Lag Offline)</label>
+          <div class="card-title">
+            <span>Active Speech Voice</span>
+            <span style="font-size: 11px; color: #34d399; font-weight: 600;">0ms Offline Latency</span>
+          </div>
+          <label>Selected Voice Model</label>
           <select id="browser-voice-select" onchange="updateSettings()"></select>
-          <div style="display: flex; gap: 8px; margin-top: 8px;">
-            <button class="btn-secondary" style="flex: 1; font-size: 12px; padding: 7px 12px;" id="btn-test-active-voice" onclick="testActiveVoiceSample()">
-              ▶️ Play Sample of Selected Voice
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button class="btn-secondary" style="flex: 1;" id="btn-test-active-voice" onclick="testActiveVoiceSample()">
+              <span id="test-voice-icon">▶️</span>
+              <span id="test-voice-text">Play Sample of Selected Voice</span>
+              <div id="test-voice-wave" class="equalizer-wave" style="display: none; margin-left: 6px;">
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+              </div>
             </button>
           </div>
-          <p style="font-size: 11px; color: #34d399; margin-top: 8px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
-          <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
-            Want more character voices? Go to the <b>🏪 Voice Store</b> tab to star or install voices.
+          <p class="helper-text helper-text-success">
+            ⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats without cloud buffering.
+          </p>
+          <p class="helper-text" style="margin-top: 4px;">
+            Need more character voices? Open the <b>🏪 Voice Store</b> tab to audition and install 13 neural models.
           </p>
 
-          <div style="margin-top: 12px;">
-            <label>Master Speech Volume: <span id="vol-label">100%</span></label>
+          <div style="margin-top: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="margin-bottom: 0;">Master Speech Volume</label>
+              <span id="vol-label" style="font-size: 12px; font-weight: 700; color: var(--accent-cyan); font-family: ui-monospace, monospace;">100%</span>
+            </div>
             <input type="range" id="vol-slider" min="0" max="1" step="0.05" value="1" style="width: 100%;" oninput="changeVolume(this.value)" />
           </div>
         </div>
 
-        <!-- 3. Fan Club & Audience Permissions -->
+        <!-- 3. Audience & Fan Club Permissions -->
         <div class="card">
           <div class="card-title">Audience & Fan Club Access</div>
+          
           <label>Command Prefix Trigger</label>
           <select id="command-prefix" onchange="updateSettings()" style="margin-bottom: 6px;">
             <option value="">None (Speak all comments)</option>
@@ -1546,10 +1994,12 @@ HTML_CONTENT = """<!DOCTYPE html>
             <option value="/">/ (Slash) — e.g. /hello</option>
             <option value="!">! (Exclamation) — e.g. !hello</option>
           </select>
-          <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">Only comments starting with this prefix are spoken (prefix is stripped before speaking).</p>
+          <p class="helper-text" style="margin-bottom: 14px;">
+            Only messages beginning with the chosen prefix trigger speech (prefix is cleanly stripped before speaking).
+          </p>
 
           <label>Who Can Trigger Text-to-Speech?</label>
-          <select id="role-filter" onchange="updateSettings()" style="margin-bottom: 12px;">
+          <select id="role-filter" onchange="updateSettings()" style="margin-bottom: 14px;">
             <option value="anyone">Everyone (Open to all chat)</option>
             <option value="followers">Followers Only</option>
             <option value="fan_club">Fan Club Members Only (Closes TTS for non-members)</option>
@@ -1558,39 +2008,53 @@ HTML_CONTENT = """<!DOCTYPE html>
 
           <label>Minimum Fan Club Level to Speak (0 = Any Level)</label>
           <input type="number" id="min-fan-level" min="0" max="50" value="0" onchange="updateSettings()" style="margin-bottom: 6px;" />
-          <p style="font-size: 11px; color: var(--text-muted);">Set to e.g. <b>5</b> to close TTS for viewers below Level 5 or not in the fan club.</p>
+          <p class="helper-text" style="margin-bottom: 14px;">
+            Example: Set to <b>5</b> to reserve speech strictly for loyal fan club members Level 5+.
+          </p>
 
-          <div class="toggle-row" style="margin-top: 10px;">
+          <div class="toggle-row">
             <label for="fan-announce-toggle">Announce New Fans & Subs (TTS + Chime)</label>
-            <input type="checkbox" id="fan-announce-toggle" checked onchange="updateSettings()" />
+            <label class="switch">
+              <input type="checkbox" id="fan-announce-toggle" checked onchange="updateSettings()" />
+              <span class="slider"></span>
+            </label>
           </div>
         </div>
 
-        <!-- 4. Gift Controls & Milestones -->
+        <!-- 4. Gift Alerts & Milestones -->
         <div class="card">
           <div class="card-title">Gift Callouts & Sound Alerts</div>
           <div class="toggle-row">
             <label for="gift-tts-toggle">Speak Gift Announcements</label>
-            <input type="checkbox" id="gift-tts-toggle" checked onchange="updateSettings()" />
+            <label class="switch">
+              <input type="checkbox" id="gift-tts-toggle" checked onchange="updateSettings()" />
+              <span class="slider"></span>
+            </label>
           </div>
           <div class="toggle-row">
             <label for="gift-sound-toggle">Play Gift Alert Chime Sound</label>
-            <input type="checkbox" id="gift-sound-toggle" checked onchange="updateSettings()" />
+            <label class="switch">
+              <input type="checkbox" id="gift-sound-toggle" checked onchange="updateSettings()" />
+              <span class="slider"></span>
+            </label>
           </div>
-          <label style="margin-top: 8px;">Minimum Gift Coins for Speech</label>
+          <label style="margin-top: 10px;">Minimum Gift Coins for Speech</label>
           <input type="number" id="gift-min-coins" min="1" max="10000" value="1" onchange="updateSettings()" />
-          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Ignore cheap 1-coin spam and only speak bigger gifts.</p>
+          <p class="helper-text">Filter out cheap 1-coin spam to highlight substantial gifts.</p>
         </div>
 
-        <!-- 5. Anti-Spam & Moderation -->
+        <!-- 5. Safety & Anti-Spam Moderation -->
         <div class="card">
-          <div class="card-title">Safety & Anti-Troll</div>
+          <div class="card-title">Safety & Anti-Troll Defense</div>
           <div class="toggle-row">
             <label for="spam-automute-toggle">Auto-Mute Rapid Spammers (3 msgs / 10s)</label>
-            <input type="checkbox" id="spam-automute-toggle" checked onchange="updateSettings()" />
+            <label class="switch">
+              <input type="checkbox" id="spam-automute-toggle" checked onchange="updateSettings()" />
+              <span class="slider"></span>
+            </label>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
             <div>
               <label>Cooldown (sec)</label>
               <input type="number" id="cooldown-input" value="5" min="1" max="60" onchange="updateSettings()" />
@@ -1601,54 +2065,71 @@ HTML_CONTENT = """<!DOCTYPE html>
             </div>
           </div>
 
-          <label style="margin-top: 10px;">Banned Words (comma separated)</label>
+          <label style="margin-top: 12px;">Banned Words (comma separated)</label>
           <input type="text" id="banned-input" placeholder="badword1, troll2" onchange="updateSettings()" />
         </div>
 
-        <!-- 6. Test Audio Sandbox -->
+        <!-- 6. Test Audio Soundboard -->
         <div class="card">
-          <div class="card-title">Test Audio Sandbox</div>
+          <div class="card-title">
+            <span>Test Audio Soundboard</span>
+            <span style="font-size: 11px; color: var(--text-tertiary);">Quick Presets</span>
+          </div>
           <div class="preset-chips">
             <span class="chip" onclick="applyPreset('Welcome to the livestream everyone!')">👋 Welcome</span>
-            <span class="chip" onclick="applyPreset('Thank you for the roses and gifts!')">🌹 Thanks for Gift</span>
-            <span class="chip" onclick="applyPreset('Let\'s go! Hype in the chat!')">🔥 Hype</span>
-            <span class="chip" onclick="applyPreset('GG on that round! Intense match.')">🎮 GG Match</span>
-            <span class="chip" onclick="applyPreset('Shoutout to the top gifter on the leaderboard!')">👑 Leaderboard</span>
+            <span class="chip" onclick="applyPreset('Thank you so much for the gifts and support!')">🌹 Thanks for Gift</span>
+            <span class="chip" onclick="applyPreset('Let\'s go! Drop some hype in the chat right now!')">🔥 Hype Stream</span>
+            <span class="chip" onclick="applyPreset('Good game everyone! What an intense round!')">🎮 GG Match</span>
+            <span class="chip" onclick="applyPreset('Massive shoutout to our top gifter on the leaderboard!')">👑 Top Gifter</span>
+            <span class="chip" onclick="applyPreset('We just smashed our stream goal! You guys are incredible!')">⭐ Goal Reached</span>
           </div>
-          <input type="text" id="test-text" placeholder="Type or click a preset above..." />
-          <button class="btn-primary" style="margin-top: 8px; width: 100%;" onclick="sendTestSpeech()">Speak Test Message</button>
+          <input type="text" id="test-text" placeholder="Type or click any preset above..." />
+          <button class="btn-primary" style="margin-top: 10px; width: 100%;" onclick="sendTestSpeech()">
+            🗣️ Speak Test Message
+          </button>
         </div>
       </div>
 
-      <!-- Right Column: Speaking Monitor & Live Chat -->
+      <!-- Right Column: Speaking Monitor & Live Stream Feed -->
       <div>
         <div class="card now-speaking-card">
           <div class="card-title">
-            <span>Now Speaking</span>
-            <span style="font-size: 13px; font-weight: normal; color: #93c5fd;">Queue: <span id="queue-count">0</span> items</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="card-title-accent">NOW SPEAKING</span>
+              <div id="spk-wave" class="equalizer-wave">
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+              </div>
+            </div>
+            <span style="font-size: 12px; font-weight: 600; color: #93c5fd;">Queue: <span id="queue-count" style="font-family: ui-monospace, monospace; font-weight: 800;">0</span></span>
           </div>
           <div class="speaking-display">
             <div id="spk-user" class="speaking-user" style="display: none;"></div>
             <div id="spk-text" class="speaking-text speaking-idle">No audio currently playing. Waiting for chat...</div>
           </div>
           <div class="btn-row">
-            <button class="btn-danger" onclick="skipAudio()">⏹️ Skip Message</button>
-            <button class="btn-secondary" onclick="clearQueue()">🗑️ Clear Queue</button>
+            <button class="btn-danger" style="flex: 1;" onclick="skipAudio()">⏹️ Skip Message</button>
+            <button class="btn-secondary" style="flex: 1;" onclick="clearQueue()">🗑️ Clear Queue</button>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div class="card-title" style="flex-wrap: wrap; gap: 8px;">
             <span>Live Chat & Gift Activity</span>
-            <div style="display: flex; gap: 5px;">
-              <button class="chip" id="flt-all" style="background: var(--accent-cyan); color: #000;" onclick="filterLog('all')">All</button>
+            <div style="display: flex; gap: 6px;">
+              <button class="chip active" id="flt-all" onclick="filterLog('all')">All</button>
               <button class="chip" id="flt-spoken" onclick="filterLog('spoken')">🗣️ Spoken</button>
               <button class="chip" id="flt-gifts" onclick="filterLog('gifts')">🎁 Gifts</button>
               <button class="chip" id="flt-blocked" onclick="filterLog('blocked')">🚫 Filtered</button>
             </div>
           </div>
           <div id="log-list" class="log-container">
-            <div style="color: #64748b; text-align: center; margin-top: 40px;">Live comments and gifts will stream here when connected...</div>
+            <div style="color: #64748b; text-align: center; margin-top: 60px; font-size: 13px;">
+              Live viewer comments and gift alerts will stream here when connected...
+            </div>
           </div>
         </div>
       </div>
@@ -1657,17 +2138,17 @@ HTML_CONTENT = """<!DOCTYPE html>
 
   <!-- TAB 2: TikTok Studio Overlay -->
   <div id="tab-overlay" class="tab-content">
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px;">
       <div class="card" style="border: 1px solid #0284c7; background: linear-gradient(135deg, #0b1329 0%, #075985 100%);">
         <div class="card-title" style="color: #38bdf8;">
           <span>📺 TikTok Live Studio Setup</span>
         </div>
         <p style="font-size: 13px; color: #e2e8f0; line-height: 1.6; margin-bottom: 14px;">
-          Add real-time floating chat subtitles & animated gift celebration alerts directly onto your live broadcast with a transparent background.
+          Render floating chat subtitles & animated gift popups directly over your stream video in TikTok Live Studio with full alpha transparency.
         </p>
-        <div style="background: rgba(0,0,0,0.4); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
-          <div style="font-size: 12px; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">3-STEP SETUP IN TIKTOK LIVE STUDIO:</div>
-          <ol style="font-size: 12px; color: #cbd5e1; margin-left: 18px; line-height: 1.7;">
+        <div style="background: rgba(0,0,0,0.45); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">3-STEP SETUP IN TIKTOK LIVE STUDIO:</div>
+          <ol style="font-size: 12px; color: #cbd5e1; margin-left: 18px; line-height: 1.8;">
             <li>Click <b>Add Source</b> at the bottom of TikTok Live Studio.</li>
             <li>Select <b>Link / Browser Source</b>.</li>
             <li>Paste your private overlay link below and set <b>Width: 850</b>, <b>Height: 250</b>.</li>
@@ -1675,8 +2156,8 @@ HTML_CONTENT = """<!DOCTYPE html>
         </div>
         <label>Your Live Transparent Overlay URL</label>
         <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-          <input type="text" id="overlay-url" readonly style="background: rgba(0,0,0,0.6); font-family: monospace; font-size: 12px; color: #38bdf8;" />
-          <button class="btn-primary" style="flex: 0 0 120px;" onclick="copyOverlayUrl()">📋 Copy URL</button>
+          <input type="text" id="overlay-url" readonly style="background: rgba(0,0,0,0.6); font-family: ui-monospace, monospace; font-size: 12px; color: #38bdf8;" />
+          <button class="btn-primary" style="flex: 0 0 130px;" onclick="copyOverlayUrl()">📋 Copy URL</button>
         </div>
         <div class="btn-row">
           <button class="btn-secondary" onclick="testOverlaySubtitle()">⚡ Trigger Test Subtitle</button>
@@ -1684,28 +2165,28 @@ HTML_CONTENT = """<!DOCTYPE html>
         </div>
       </div>
 
-      <!-- Right Column: Simulator -->
+      <!-- Right Column: Interactive Overlay Preview Simulator -->
       <div class="card">
         <div class="card-title">
           <span>Live Overlay Preview Simulator</span>
-          <span style="font-size: 11px; color: var(--text-muted);">Real-time broadcast preview</span>
+          <span style="font-size: 11px; color: var(--text-tertiary);">Real-time broadcast render</span>
         </div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-          This preview simulates how subtitles and gift popups appear over your stream video:
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+          Preview how real-time floating subtitles and gift celebrations render over your game or camera:
         </p>
-        <div style="background: #020617; border: 1px dashed #334155; border-radius: 12px; height: 260px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 20px; position: relative; overflow: hidden;">
-          <div style="position: absolute; top: 12px; left: 14px; font-size: 11px; color: #64748b; font-weight: 600;">[STREAM VIDEO / GAMEPLAY BACKGROUND]</div>
+        <div style="background: #020617; border: 1px dashed #334155; border-radius: 12px; height: 280px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 20px; position: relative; overflow: hidden;">
+          <div style="position: absolute; top: 12px; left: 14px; font-size: 11px; color: #475569; font-weight: 700;">[STREAM VIDEO / GAMEPLAY PREVIEW]</div>
           
           <div id="sim-gift" style="display: none; position: absolute; top: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); border: 2px solid #fde68a; border-radius: 12px; padding: 10px 20px; color: #000; font-weight: 800; font-size: 14px; box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);">
             🎁 GamerFan99 Sent 10x Roses!
           </div>
 
-          <div id="sim-subtitle" style="display: flex; align-items: center; gap: 14px; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px; padding: 14px 20px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <div class="equalizer" style="height: 18px;">
-              <div class="bar"></div>
-              <div class="bar"></div>
-              <div class="bar"></div>
-              <div class="bar"></div>
+          <div id="sim-subtitle" style="display: flex; align-items: center; gap: 14px; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px; padding: 14px 20px; width: 92%; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <div class="equalizer-wave eq-active" style="height: 18px;">
+              <div class="eq-bar"></div>
+              <div class="eq-bar"></div>
+              <div class="eq-bar"></div>
+              <div class="eq-bar"></div>
             </div>
             <div>
               <div style="font-size: 12px; font-weight: 800; color: #38bdf8;">
@@ -1719,64 +2200,104 @@ HTML_CONTENT = """<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- TAB 3: Voice Store (Offline 0ms) -->
+  <!-- TAB 3: Voice Store (13 Neural Offline Voices) -->
   <div id="tab-store" class="tab-content">
     <div class="card">
       <div class="card-title">
-        <span>🏪 Offline Voice Store</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 16px; font-weight: 800; color: #fff;">🏪 Offline Neural Voice Store</span>
+          <span class="version-pill" style="color: #34d399; border-color: rgba(16, 185, 129, 0.3);">13 Voices Available</span>
+        </div>
         <span style="font-size: 12px; color: #34d399; font-weight: 600;">⚡ All voices run locally with 0ms lag</span>
       </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 18px;">
-        Browse and install neural character voices directly onto your computer. Star your favorites (⭐) to pin them to the top of the store catalog and your active voice dropdown!
+      <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;">
+        Browse, audition with authentic previews, and 1-click install high-fidelity neural voices. Star your favorite voices (⭐) to pin them to the top of both the catalog and your active stream dropdown!
       </p>
 
-      <div id="voice-store-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;"></div>
+      <!-- Category Filter Toolbar & Search Bar -->
+      <div class="store-filter-bar">
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;" id="store-cat-buttons">
+          <button class="chip active" data-cat="all" onclick="filterStoreCategory('all')">All Voices (13)</button>
+          <button class="chip" data-cat="gaming" onclick="filterStoreCategory('gaming')">🔥 Gaming & Hype</button>
+          <button class="chip" data-cat="deep" onclick="filterStoreCategory('deep')">🎙️ Deep & Radio</button>
+          <button class="chip" data-cat="chill" onclick="filterStoreCategory('chill')">☕ Chill & Story</button>
+          <button class="chip" data-cat="warm" onclick="filterStoreCategory('warm')">✨ Warm & Friendly</button>
+          <button class="chip" data-cat="accents" onclick="filterStoreCategory('accents')">🇬🇧 British & Accents</button>
+          <button class="chip" data-cat="starred" onclick="filterStoreCategory('starred')">⭐ Starred</button>
+        </div>
+        <div class="store-search-box">
+          <input type="text" id="store-search-input" placeholder="🔍 Search voices..." oninput="handleStoreSearch(this.value)" />
+        </div>
+      </div>
+
+      <div id="voice-store-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px;"></div>
     </div>
   </div>
 
-  <!-- TAB 4: Settings & Audio Routing -->
+  <!-- TAB 4: Settings & Audio Hardware Routing -->
   <div id="tab-settings" class="tab-content">
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-      <!-- Audio Routing Card -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px;">
+      <!-- Audio Hardware Card -->
       <div class="card">
         <div class="card-title">Audio Hardware & Output Routing</div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-          Choose which headphones, speaker, or virtual audio channel (e.g. Elgato Wave Link, SteelSeries Sonar, GoXLR) this app sends speech sound to.
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5;">
+          Direct speech playback to a dedicated headphone jack, virtual audio cable, or studio mixer channel (e.g. Elgato Wave Link, SteelSeries Sonar, GoXLR, Voicemeeter).
         </p>
         <label>Audio Output Device</label>
         <select id="audio-device-select" style="margin-bottom: 14px;" onchange="changeAudioDevice()"></select>
 
-        <label>TTS Speech Volume: <span id="set-vol-label">100%</span></label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label style="margin-bottom: 0;">TTS Speech Volume</label>
+          <span id="set-vol-label" style="font-size: 12px; font-weight: 700; color: var(--accent-cyan); font-family: ui-monospace, monospace;">100%</span>
+        </div>
         <input type="range" id="set-vol-slider" min="0" max="1" step="0.05" value="1" style="width: 100%; margin-bottom: 14px;" oninput="changeVolume(this.value)" />
 
         <div class="btn-row">
-          <button class="btn-secondary" onclick="testAudioDevice()">🔊 Play Test Sound</button>
+          <button class="btn-secondary" onclick="testAudioDevice()">🔊 Play Test Chime</button>
         </div>
       </div>
 
-      <!-- App Updates & System Card -->
+      <!-- App Updates & Engine Info -->
       <div class="card">
-        <div class="card-title">Software Updates & System</div>
+        <div class="card-title">Software Updates & Architecture</div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
           <div>
             <div style="font-size: 14px; font-weight: 700; color: #fff;">TikTok Live TTS Studio</div>
-            <div style="font-size: 12px; color: var(--text-muted);">Current Installed Version: <b id="settings-version">v1.4.0</b></div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.0</b></div>
           </div>
-          <button class="btn-secondary" style="flex: 0 0 140px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
+          <button class="btn-secondary" style="flex: 0 0 150px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
         </div>
         <div id="settings-update-status" style="font-size: 12px; color: #38bdf8; margin-bottom: 14px;">App is currently up to date.</div>
         
-        <div style="border-top: 1px solid var(--card-border); padding-top: 14px;">
-          <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">PORT CONFIGURATION</div>
-          <div style="font-size: 12px; color: var(--text-muted);">Active Internal Engine Port: <b style="color: #38bdf8;" id="settings-port">28730</b> (Private conflict-free range)</div>
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">PORT ARCHITECTURE</div>
+          <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+            Active Internal Engine Port: <b style="color: #38bdf8;" id="settings-port">28730</b><br/>
+            Private conflict-free port allocated exclusively for TikTok Live Studio overlay integration.
+          </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Update Changelog Modal -->
+  <div id="update-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 id="modal-title" style="font-size: 16px; font-weight: 800; color: #fff;">What's New</h3>
+        <button class="chip" onclick="closeUpdateModal()" style="padding: 4px 10px;">✕</button>
+      </div>
+      <div id="modal-changelog" style="font-size: 13px; color: #cbd5e1; line-height: 1.6; max-height: 220px; overflow-y: auto; margin-bottom: 20px;"></div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-primary" style="flex: 2;" id="modal-update-btn" onclick="installUpdate()">⚡ Update & Restart Now</button>
+        <button class="btn-secondary" style="flex: 1;" onclick="closeUpdateModal()">Later</button>
       </div>
     </div>
   </div>
 
   <footer>
-    <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers are responsible for broadcast content.</span>
-    <span>TikTok Live TTS Studio</span>
+    <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers maintain full moderation responsibility.</span>
+    <span>TikTok Live TTS Studio v1.9.0 • 0ms Local Neural Voice Engine</span>
   </footer>
 
   <script>
@@ -1786,6 +2307,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         name: "Nova",
         subtitle: "High-Energy Anime Female",
         badge: "Anime / Hype",
+        category: "gaming",
         badgeStyle: "background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);",
         desc: "Expressive, cheerful, and fast-paced. Perfect for hype gaming and interactive chat reactions.",
         sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/amy/medium/speaker_0.mp3"
@@ -1795,6 +2317,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         name: "Kael",
         subtitle: "Deep FM Radio Announcer",
         badge: "Deep / Radio",
+        category: "deep",
         badgeStyle: "background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);",
         desc: "Resonant, bass-heavy broadcast DJ voice. Ideal for chill late-night talk streams and podcasting.",
         sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/bryce/medium/speaker_0.mp3"
@@ -1804,6 +2327,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         name: "Arthur",
         subtitle: "Distinguished British Butler",
         badge: "British / Formal",
+        category: "accents",
         badgeStyle: "background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);",
         desc: "Polite, crisp UK English with formal tone. Reads chat comments with butler-like elegance.",
         sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_GB/alan/medium/speaker_0.mp3"
@@ -1813,6 +2337,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         name: "Viper",
         subtitle: "Esports Shoutcaster",
         badge: "Gaming / FPS",
+        category: "gaming",
         badgeStyle: "background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);",
         desc: "Fast, hype tournament commentator style. Built for high-kill FPS and battle royale streams.",
         sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/ryan/medium/speaker_0.mp3"
@@ -1822,6 +2347,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         name: "Luna",
         subtitle: "Calm & Cozy Storyteller",
         badge: "Cozy / ASMR",
+        category: "chill",
         badgeStyle: "background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);",
         desc: "Soft, gentle, relaxing voice. Ideal for art streams, cozy farming games, and quiet evening streams.",
         sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/kathleen/medium/speaker_0.mp3"
@@ -1831,9 +2357,80 @@ HTML_CONTENT = """<!DOCTYPE html>
         name: "Thor",
         subtitle: "Nordic Warrior / Northern Male",
         badge: "Fantasy / Epic",
+        category: "accents",
         badgeStyle: "background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);",
         desc: "Thunderous, roaring, epic character. Turns simple chat messages into battle declarations.",
         sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_GB/northern_english_male/medium/speaker_0.mp3"
+      },
+      {
+        id: "danny",
+        name: "Danny",
+        subtitle: "Gamer / Teen Hype",
+        badge: "US / Teen Hype",
+        category: "gaming",
+        badgeStyle: "background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3);",
+        desc: "Youthful, energetic US English voice. Awesome for gaming banter, fast-paced stream hype, and jokes.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/danny/low/speaker_0.mp3"
+      },
+      {
+        id: "lessac",
+        name: "Lessac",
+        subtitle: "Studio Narrator / Pro Audiobook",
+        badge: "US / Studio Clear",
+        category: "chill",
+        badgeStyle: "background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3);",
+        desc: "Pristine, neutral, studio-grade narration voice. Flawlessly clear pronunciation for reading long questions and viewer tips.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/lessac/medium/speaker_0.mp3"
+      },
+      {
+        id: "joe",
+        name: "Joe",
+        subtitle: "Chill Streamer / Casual Male",
+        badge: "US / Casual Chill",
+        category: "chill",
+        badgeStyle: "background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);",
+        desc: "Laid-back, conversational everyday guy. Feels like a stream co-host chatting on Discord.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/joe/medium/speaker_0.mp3"
+      },
+      {
+        id: "kristin",
+        name: "Kristin",
+        subtitle: "Warm & Cheerful Female",
+        badge: "US / Warm & Friendly",
+        category: "warm",
+        badgeStyle: "background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);",
+        desc: "Friendly, inviting, and upbeat female voice. Great for welcome greetings and donor thank-yous.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/kristin/medium/speaker_0.mp3"
+      },
+      {
+        id: "mike",
+        name: "Mike",
+        subtitle: "Deep Baritone / Esports Caster",
+        badge: "US / Deep Caster",
+        category: "deep",
+        badgeStyle: "background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3);",
+        desc: "Deep, authoritative, cinematic male baritone. Gives substantial punch and weight to stream commentary.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_US/mike/medium/speaker_0.mp3"
+      },
+      {
+        id: "alba",
+        name: "Alba",
+        subtitle: "Scottish Storyteller Female",
+        badge: "Scottish / Character",
+        category: "accents",
+        badgeStyle: "background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);",
+        desc: "Distinctive Scottish accent with lyrical warmth and charm. Captivating character voice for roleplay and storytelling.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_GB/alba/medium/speaker_0.mp3"
+      },
+      {
+        id: "cori",
+        name: "Cori",
+        subtitle: "British Queen's English Female",
+        badge: "UK / Royal Eloquent",
+        category: "accents",
+        badgeStyle: "background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3);",
+        desc: "Crisp, pristine Received Pronunciation British female. Highly articulate, elegant, and sophisticated.",
+        sampleUrl: "https://rhasspy.github.io/piper-samples/samples/en/en_GB/cori/medium/speaker_0.mp3"
       }
     ];
 
@@ -1851,6 +2448,9 @@ HTML_CONTENT = """<!DOCTYPE html>
     let starredVoices = [];
     let latestReleaseNotes = "";
     let latestVersionStr = "";
+    let currentStoreCategory = "all";
+    let storeSearchQuery = "";
+    let currentLogFilter = 'all';
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -1960,7 +2560,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     function openUpdateModal() {
       document.getElementById('modal-title').textContent = `What's New in v${latestVersionStr || 'Latest'}`;
       const lines = latestReleaseNotes.split('\\n').filter(l => l.trim().length > 0);
-      let html = '<ul>';
+      let html = '<ul style="margin-left: 20px;">';
       lines.forEach(line => {
         html += `<li>${line.replace(/^[*-]\\s*/, '')}</li>`;
       });
@@ -2031,12 +2631,12 @@ HTML_CONTENT = """<!DOCTYPE html>
       const nonStarredInstalled = installedStoreVoices.filter(id => !starredVoices.includes(id));
       if (nonStarredInstalled.length > 0) {
         const instGroup = document.createElement('optgroup');
-        instGroup.label = "Installed Offline Voices";
+        instGroup.label = "Installed Offline Voices (0ms)";
         nonStarredInstalled.forEach(vId => {
           const v = STORE_CATALOG.find(c => c.id === vId);
           const opt = document.createElement('option');
           opt.value = "store:" + vId;
-          opt.textContent = `✓ ${v ? v.name : vId} (0ms Offline)`;
+          opt.textContent = `✓ ${v ? v.name : vId} (${v ? v.subtitle : '0ms Offline'})`;
           const isMatch = savedNativeVoice && v && (
             savedNativeVoice === ("store:" + vId) ||
             savedNativeVoice === vId ||
@@ -2077,11 +2677,40 @@ HTML_CONTENT = """<!DOCTYPE html>
       }
     }
 
+    function filterStoreCategory(cat) {
+      currentStoreCategory = cat;
+      document.querySelectorAll('#store-cat-buttons .chip').forEach(btn => {
+        if (btn.getAttribute('data-cat') === cat) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+      renderVoiceStoreGrid();
+    }
+
+    function handleStoreSearch(val) {
+      storeSearchQuery = (val || '').toLowerCase().trim();
+      renderVoiceStoreGrid();
+    }
+
     function renderVoiceStoreGrid() {
       const container = document.getElementById('voice-store-grid');
       if (!container) return;
 
-      const sortedList = [...STORE_CATALOG].sort((a, b) => {
+      // Filter by category and search query
+      let filtered = STORE_CATALOG.filter(v => {
+        if (currentStoreCategory === 'starred') {
+          if (!starredVoices.includes(v.id)) return false;
+        } else if (currentStoreCategory !== 'all') {
+          if (v.category !== currentStoreCategory) return false;
+        }
+        if (storeSearchQuery) {
+          const hay = `${v.name} ${v.subtitle} ${v.desc} ${v.badge}`.toLowerCase();
+          if (!hay.includes(storeSearchQuery)) return false;
+        }
+        return true;
+      });
+
+      // Sort starred first
+      filtered.sort((a, b) => {
         const aStarred = starredVoices.includes(a.id);
         const bStarred = starredVoices.includes(b.id);
         if (aStarred && !bStarred) return -1;
@@ -2089,7 +2718,16 @@ HTML_CONTENT = """<!DOCTYPE html>
         return 0;
       });
 
-      container.innerHTML = sortedList.map(v => {
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-tertiary);">
+            No voices match your search criteria.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(v => {
         const isStarred = starredVoices.includes(v.id);
         const isInstalled = installedStoreVoices.includes(v.id);
         const isPlayingThis = (currentPreviewId === v.id);
@@ -2097,10 +2735,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         let actionHtml = '';
         if (isInstalled) {
           actionHtml = `
-            <button class="btn-secondary" style="font-size: 11px; flex: 1; cursor: default;" disabled>
-              ✓ Installed (Offline)
+            <button class="btn-secondary" style="font-size: 11px; flex: 2; cursor: default; background: rgba(16, 185, 129, 0.12); color: #34d399; border-color: rgba(16, 185, 129, 0.3);" disabled>
+              ✓ Installed (0ms Offline)
             </button>
-            <button class="btn-danger" style="font-size: 11px; padding: 6px 12px;" onclick="uninstallVoiceStore('${v.id}')">
+            <button class="btn-danger" style="font-size: 11px; flex: 1; padding: 6px 10px;" onclick="uninstallVoiceStore('${v.id}')">
               🗑️ Uninstall
             </button>
           `;
@@ -2113,28 +2751,38 @@ HTML_CONTENT = """<!DOCTYPE html>
         }
 
         return `
-          <div class="card" style="margin-bottom: 0; background: #0c1222; border: 1px solid ${isStarred ? '#f59e0b' : '#1e293b'}; position: relative; transition: border-color 0.2s;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+          <div class="voice-card ${isStarred ? 'starred' : ''}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
               <div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="font-size: 16px; font-weight: 700; color: #fff;">${v.name}</span>
+                  <span style="font-size: 17px; font-weight: 800; color: #fff;">${v.name}</span>
                   ${isStarred ? '<span style="font-size: 13px; color: #f59e0b;">⭐</span>' : ''}
                 </div>
-                <div style="font-size: 11px; color: #38bdf8;">${v.subtitle}</div>
+                <div style="font-size: 12px; color: #38bdf8; font-weight: 500; margin-top: 2px;">${v.subtitle}</div>
               </div>
               <div style="display: flex; align-items: center; gap: 6px;">
-                <button class="chip" onclick="toggleStarVoice('${v.id}')" style="background: ${isStarred ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)'}; color: ${isStarred ? '#f59e0b' : '#94a3b8'}; border: 1px solid ${isStarred ? '#f59e0b' : '#334155'}; font-size: 11px; padding: 3px 8px; cursor: pointer;">
+                <button class="star-btn ${isStarred ? 'active' : ''}" onclick="toggleStarVoice('${v.id}')">
                   ${isStarred ? '★ Starred' : '☆ Star'}
                 </button>
-                <span class="badge" style="${v.badgeStyle}">${v.badge}</span>
+                <span class="voice-badge-tag" style="${v.badgeStyle}">${v.badge}</span>
               </div>
             </div>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px; line-height: 1.5;">
+
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; min-height: 48px; line-height: 1.55;">
               ${v.desc}
             </p>
+
             <div style="display: flex; gap: 8px;">
-              <button class="btn-secondary" style="font-size: 11px; flex: 1;" onclick="togglePreviewVoice('${v.id}')">
-                ${isPlayingThis ? '⏸️ Pause Sample' : '▶️ Play Sample'}
+              <button class="btn-secondary" style="font-size: 11px; flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="togglePreviewVoice('${v.id}')">
+                <span>${isPlayingThis ? '⏸️ Pause Sample' : '▶️ Play Sample'}</span>
+                ${isPlayingThis ? `
+                  <div class="equalizer-wave eq-active" style="height: 14px;">
+                    <div class="eq-bar" style="height: 4px;"></div>
+                    <div class="eq-bar" style="height: 10px;"></div>
+                    <div class="eq-bar" style="height: 14px;"></div>
+                    <div class="eq-bar" style="height: 8px;"></div>
+                  </div>
+                ` : ''}
               </button>
               ${actionHtml}
             </div>
@@ -2207,7 +2855,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       const btn = document.getElementById('btn-install-' + vId);
       if (btn) {
         btn.disabled = true;
-        btn.textContent = "⏳ Installing...";
+        btn.textContent = "⏳ Installing (0ms)...";
       }
       try {
         const res = await fetch('/api/install-voice', {
@@ -2272,10 +2920,12 @@ HTML_CONTENT = """<!DOCTYPE html>
     function playPiperAudio(item) {
       const userEl = document.getElementById('spk-user');
       const textEl = document.getElementById('spk-text');
+      const waveEl = document.getElementById('spk-wave');
       userEl.style.display = 'block';
       userEl.textContent = '⚡ ' + (item.user || 'Voice');
       textEl.className = 'speaking-text';
       textEl.textContent = item.display || item.text;
+      if (waveEl) waveEl.classList.add('eq-active');
 
       if (activeAudio) {
         try { activeAudio.pause(); } catch (e) {}
@@ -2321,10 +2971,12 @@ HTML_CONTENT = """<!DOCTYPE html>
 
       const userEl = document.getElementById('spk-user');
       const textEl = document.getElementById('spk-text');
+      const waveEl = document.getElementById('spk-wave');
       userEl.style.display = 'block';
       userEl.textContent = '⚡ ' + (voiceName || 'Local Voice');
       textEl.className = 'speaking-text';
       textEl.textContent = text;
+      if (waveEl) waveEl.classList.add('eq-active');
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.volume = currentVolume;
@@ -2358,8 +3010,13 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     async function testActiveVoiceSample() {
       const btn = document.getElementById('btn-test-active-voice');
-      const origText = btn ? btn.textContent : "▶️ Play Sample of Selected Voice";
-      if (btn) btn.textContent = "⏳ Speaking Sample...";
+      const icon = document.getElementById('test-voice-icon');
+      const txt = document.getElementById('test-voice-text');
+      const wave = document.getElementById('test-voice-wave');
+      
+      if (icon) icon.textContent = "⏳";
+      if (txt) txt.textContent = "Speaking Sample...";
+      if (wave) { wave.style.display = "flex"; wave.classList.add("eq-active"); }
       
       const testPhrase = "Hello! This voice is ready for your TikTok livestream.";
       try {
@@ -2384,8 +3041,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         console.error("testActiveVoiceSample error:", err);
       } finally {
         setTimeout(() => {
-          if (btn) btn.textContent = origText;
-        }, 1500);
+          if (icon) icon.textContent = "▶️";
+          if (txt) txt.textContent = "Play Sample of Selected Voice";
+          if (wave) { wave.style.display = "none"; wave.classList.remove("eq-active"); }
+        }, 1800);
       }
     }
 
@@ -2425,10 +3084,6 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     function testAudioDevice() {
       playGiftChime();
-    }
-
-    function setEngine(mode) {
-      currentEngine = "instant";
     }
 
     function handleWsMessage(data) {
@@ -2500,40 +3155,16 @@ HTML_CONTENT = """<!DOCTYPE html>
       }
     }
 
-    function playNextCloud() {
-      if (isPlaying || audioQueue.length === 0) return;
-      isPlaying = true;
-      const item = audioQueue.shift();
-
-      const userEl = document.getElementById('spk-user');
-      const textEl = document.getElementById('spk-text');
-      userEl.style.display = 'block';
-      userEl.textContent = '☁️ ' + item.user;
-      textEl.className = 'speaking-text';
-      textEl.textContent = item.display || item.text;
-
-      activeAudio = new Audio("data:audio/mp3;base64," + item.audio_b64);
-      if (activeAudio.setSinkId && selectedAudioDevice !== 'default') {
-        activeAudio.setSinkId(selectedAudioDevice);
-      }
-      activeAudio.volume = currentVolume;
-      activeAudio.onended = finishPlay;
-      activeAudio.onerror = finishPlay;
-
-      activeAudio.play().catch(e => {
-        finishPlay();
-      });
-    }
-
     function finishPlay() {
       isPlaying = false;
       activeAudio = null;
       const userEl = document.getElementById('spk-user');
       const textEl = document.getElementById('spk-text');
+      const waveEl = document.getElementById('spk-wave');
       userEl.style.display = 'none';
       textEl.className = 'speaking-text speaking-idle';
       textEl.textContent = 'No audio currently playing. Waiting for chat...';
-      if (currentEngine === 'cloud') playNextCloud();
+      if (waveEl) waveEl.classList.remove('eq-active');
     }
 
     function skipAudio() {
@@ -2548,18 +3179,28 @@ HTML_CONTENT = """<!DOCTYPE html>
     function updateStatus(status, msg) {
       const badge = document.getElementById('status-badge');
       const text = document.getElementById('status-text');
-      badge.className = 'badge ' + status;
-      text.textContent = status.toUpperCase();
-      document.getElementById('status-msg').textContent = msg || '';
+      const dot = badge ? badge.querySelector('.status-dot') : null;
+      if (badge && text) {
+        badge.className = 'telemetry-badge ' + status;
+        text.textContent = status.toUpperCase();
+        if (dot) {
+          if (status === 'connected') dot.className = 'status-dot pulse';
+          else dot.className = 'status-dot';
+        }
+      }
+      const msgEl = document.getElementById('status-msg');
+      if (msgEl) msgEl.textContent = msg || '';
     }
 
     function updateQueue(count) {
-      document.getElementById('queue-count').textContent = count;
+      const el = document.getElementById('queue-count');
+      if (el) el.textContent = count;
     }
 
     function addLogItem(item) {
       const list = document.getElementById('log-list');
-      if (list.children.length === 1 && list.children[0].textContent.includes('Live comments')) {
+      if (!list) return;
+      if (list.children.length === 1 && list.children[0].textContent.includes('Live viewer comments')) {
         list.innerHTML = '';
       }
       const div = document.createElement('div');
@@ -2573,10 +3214,10 @@ HTML_CONTENT = """<!DOCTYPE html>
       const fanBadge = (item.fan_level && item.fan_level > 0) ? `<span class="badge-fan">LV.${item.fan_level}</span>` : '';
 
       div.innerHTML = `
-        <div>
+        <div style="display: flex; align-items: center; flex-wrap: wrap;">
           ${fanBadge}
           <span class="log-user">${item.user}</span>
-          <span class="log-text">${item.text} ${item.reason ? '<span style="color:#f87171;">(' + item.reason + ')</span>' : ''}</span>
+          <span class="log-text">${item.text} ${item.reason ? '<span style="color:#f87171; font-size:11px;">(' + item.reason + ')</span>' : ''}</span>
         </div>
         <span class="log-time">${item.time}</span>
       `;
@@ -2589,10 +3230,15 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     function changeVolume(val) {
       currentVolume = parseFloat(val);
-      document.getElementById('vol-label').textContent = Math.round(currentVolume * 100) + '%';
-      document.getElementById('set-vol-label').textContent = Math.round(currentVolume * 100) + '%';
-      document.getElementById('vol-slider').value = currentVolume;
-      document.getElementById('set-vol-slider').value = currentVolume;
+      const pct = Math.round(currentVolume * 100) + '%';
+      const l1 = document.getElementById('vol-label');
+      const l2 = document.getElementById('set-vol-label');
+      if (l1) l1.textContent = pct;
+      if (l2) l2.textContent = pct;
+      const s1 = document.getElementById('vol-slider');
+      const s2 = document.getElementById('set-vol-slider');
+      if (s1) s1.value = currentVolume;
+      if (s2) s2.value = currentVolume;
       if (activeAudio) activeAudio.volume = currentVolume;
     }
 
@@ -2656,19 +3302,13 @@ HTML_CONTENT = """<!DOCTYPE html>
       updateSettings();
     };
 
-    let currentLogFilter = 'all';
     function filterLog(type) {
       currentLogFilter = type;
       ['all', 'spoken', 'gifts', 'blocked'].forEach(t => {
         const btn = document.getElementById('flt-' + t);
         if (btn) {
-          if (t === type) {
-            btn.style.background = 'var(--accent-cyan)';
-            btn.style.color = '#000';
-          } else {
-            btn.style.background = '#1e293b';
-            btn.style.color = '#f1f5f9';
-          }
+          if (t === type) btn.classList.add('active');
+          else btn.classList.remove('active');
         }
       });
       const items = document.querySelectorAll('.log-item');
@@ -2683,7 +3323,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     function copyOverlayUrl() {
       const url = document.getElementById('overlay-url').value;
       navigator.clipboard.writeText(url);
-      alert("TikTok Live Studio Overlay URL copied to clipboard!\\n\\nIn TikTok Live Studio: Click 'Add Source' ➔ 'Link / Browser Source' (Width: 850, Height: 250).");
+      alert("TikTok Live Studio Overlay URL copied!\\n\\nIn TikTok Live Studio: Click 'Add Source' ➔ 'Link / Browser Source' (Width: 850, Height: 250).");
     }
 
     function testOverlaySubtitle() {
