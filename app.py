@@ -47,7 +47,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.6.0"
+CURRENT_VERSION = "1.7.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -79,7 +79,9 @@ DEFAULT_CONFIG = {
     "gift_tts_enabled": True,
     "gift_sound_enabled": True,
     "gift_min_coins": 1,
-    "spam_auto_mute": True
+    "spam_auto_mute": True,
+    "command_prefix": "",
+    "starred_voices": []
 }
 
 def load_config() -> dict:
@@ -139,6 +141,8 @@ class AppState:
         self.gift_sound_enabled: bool = cfg.get("gift_sound_enabled", True)
         self.gift_min_coins: int = cfg.get("gift_min_coins", 1)
         self.spam_auto_mute: bool = cfg.get("spam_auto_mute", True)
+        self.command_prefix: str = cfg.get("command_prefix", "")
+        self.starred_voices: list[str] = cfg.get("starred_voices", [])
 
         self.tts_queue: asyncio.Queue = asyncio.Queue()
         self.user_last_seen: dict[str, float] = {}
@@ -165,7 +169,9 @@ class AppState:
             "gift_tts_enabled": self.gift_tts_enabled,
             "gift_sound_enabled": self.gift_sound_enabled,
             "gift_min_coins": self.gift_min_coins,
-            "spam_auto_mute": self.spam_auto_mute
+            "spam_auto_mute": self.spam_auto_mute,
+            "command_prefix": self.command_prefix,
+            "starred_voices": self.starred_voices
         }
 
 state = AppState(initial_cfg)
@@ -195,6 +201,8 @@ class SettingsRequest(BaseModel):
     gift_sound_enabled: Optional[bool] = None
     gift_min_coins: Optional[int] = None
     spam_auto_mute: Optional[bool] = None
+    command_prefix: Optional[str] = None
+    starred_voices: Optional[list[str]] = None
 
 async def broadcast(data: dict):
     dead = set()
@@ -208,6 +216,15 @@ async def broadcast(data: dict):
 def check_filters(user, text: str) -> tuple[bool, str]:
     now = time.time()
     user_id = getattr(user, 'unique_id', str(getattr(user, 'id', 'user')))
+    clean_text = text.strip()
+
+    # 0. Command Prefix Trigger Check (Options: '.', '/', '!')
+    if state.command_prefix and state.command_prefix in [".", "/", "!"]:
+        if not clean_text.startswith(state.command_prefix):
+            return False, f"Requires prefix '{state.command_prefix}'"
+        clean_text = clean_text[len(state.command_prefix):].strip()
+        if not clean_text:
+            return False, "Empty message after prefix"
     
     # 1. Spam Auto-Mute Check (3+ messages in 10s = 30s mute)
     if state.spam_auto_mute:
@@ -242,7 +259,6 @@ def check_filters(user, text: str) -> tuple[bool, str]:
         return False, f"Requires Fan Lv.{state.min_fan_level} (Viewer is Lv.{fan_level})"
 
     # 3. Max length truncate
-    clean_text = text.strip()
     if len(clean_text) > state.max_chars:
         clean_text = clean_text[:state.max_chars]
     
@@ -724,6 +740,10 @@ async def api_settings(req: SettingsRequest):
         state.gift_min_coins = req.gift_min_coins
     if req.spam_auto_mute is not None:
         state.spam_auto_mute = req.spam_auto_mute
+    if req.command_prefix is not None:
+        state.command_prefix = req.command_prefix
+    if req.starred_voices is not None:
+        state.starred_voices = req.starred_voices
 
     save_config(state.export_config())
 
@@ -1202,51 +1222,18 @@ HTML_CONTENT = """<!DOCTYPE html>
           <p id="status-msg" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></p>
         </div>
 
-        <!-- 2. Voice Engine Card -->
+        <!-- 2. Voice Selection Card -->
         <div class="card">
-          <div class="card-title">Voice & Audio Engine</div>
-          <div class="engine-toggle">
-            <div id="opt-instant" class="engine-option active" onclick="setEngine('instant')">
-              ⚡ Instant Native (&lt;50ms)
-            </div>
-            <div id="opt-cloud" class="engine-option" onclick="setEngine('cloud')">
-              ☁️ Cloud Neural (HD)
-            </div>
-          </div>
-
-          <div id="instant-voice-block">
-            <label>Native Browser / OS Voice</label>
-            <select id="browser-voice-select"></select>
-            <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
-          </div>
-
-          <div id="cloud-voice-block" style="display: none;">
-            <label>Microsoft Cloud Neural Voice (HD)</label>
-            <select id="cloud-voice-select" onchange="updateSettings()">
-              <optgroup label="Popular Voices (US English)">
-                <option value="en-US-JennyNeural">Jenny (US Female - Natural & Expressive)</option>
-                <option value="en-US-GuyNeural">Guy (US Male - Clear & Dynamic)</option>
-                <option value="en-US-AvaNeural">Ava (US Female - Warm & Friendly)</option>
-                <option value="en-US-ChristopherNeural">Christopher (US Male - Energetic / Hype)</option>
-                <option value="en-US-AriaNeural">Aria (US Female - Smooth & Clear)</option>
-                <option value="en-US-AndrewNeural">Andrew (US Male - Casual Conversation)</option>
-                <option value="en-US-BrianNeural">Brian (US Male - Deep Radio Announcer)</option>
-                <option value="en-US-EmmaNeural">Emma (US Female - Cheerful & Bright)</option>
-              </optgroup>
-              <optgroup label="International English">
-                <option value="en-GB-SoniaNeural">Sonia (British Female - Crisp)</option>
-                <option value="en-GB-RyanNeural">Ryan (British Male - Friendly)</option>
-                <option value="en-GB-LibbyNeural">Libby (British Female - Storyteller)</option>
-                <option value="en-AU-NatashaNeural">Natasha (Australian Female)</option>
-                <option value="en-CA-ClaraNeural">Clara (Canadian Female)</option>
-                <option value="en-IN-NeerjaNeural">Neerja (Indian English Female)</option>
-              </optgroup>
-            </select>
-            <p style="font-size: 11px; color: #f59e0b; margin-top: 5px;">High fidelity cloud voice. Requires ~2-3s streaming buffer.</p>
-          </div>
+          <div class="card-title">Speech Voice</div>
+          <label>Selected Voice (Zero-Lag Offline)</label>
+          <select id="browser-voice-select" onchange="updateSettings()"></select>
+          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+            Want more character voices? Go to the <b>🏪 Voice Store</b> tab to star or install voices.
+          </p>
 
           <div style="margin-top: 12px;">
-            <label>Volume: <span id="vol-label">100%</span></label>
+            <label>Master Speech Volume: <span id="vol-label">100%</span></label>
             <input type="range" id="vol-slider" min="0" max="1" step="0.05" value="1" style="width: 100%;" oninput="changeVolume(this.value)" />
           </div>
         </div>
@@ -1254,6 +1241,15 @@ HTML_CONTENT = """<!DOCTYPE html>
         <!-- 3. Fan Club & Audience Permissions -->
         <div class="card">
           <div class="card-title">Audience & Fan Club Access</div>
+          <label>Command Prefix Trigger</label>
+          <select id="command-prefix" onchange="updateSettings()" style="margin-bottom: 6px;">
+            <option value="">None (Speak all comments)</option>
+            <option value=".">. (Dot) — e.g. .hello</option>
+            <option value="/">/ (Slash) — e.g. /hello</option>
+            <option value="!">! (Exclamation) — e.g. !hello</option>
+          </select>
+          <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">Only comments starting with this prefix are spoken (prefix is stripped before speaking).</p>
+
           <label>Who Can Trigger Text-to-Speech?</label>
           <select id="role-filter" onchange="updateSettings()" style="margin-bottom: 12px;">
             <option value="anyone">Everyone (Open to all chat)</option>
@@ -1433,118 +1429,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         <span style="font-size: 12px; color: #34d399; font-weight: 600;">⚡ All voices run locally with 0ms lag</span>
       </div>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 18px;">
-        Browse and install neural character voices directly onto your computer. Once installed, they speak instantaneously offline with zero network latency.
+        Browse and install neural character voices directly onto your computer. Star your favorites (⭐) to pin them to the top of the store catalog and your active voice dropdown!
       </p>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
-        <!-- Voice 1 -->
-        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-            <div>
-              <div style="font-size: 15px; font-weight: 700; color: #fff;">Nova</div>
-              <div style="font-size: 11px; color: #38bdf8;">High-Energy Anime Female</div>
-            </div>
-            <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);">Anime / Hype</span>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
-            Expressive, cheerful, and fast-paced. Perfect for hype gaming and interactive chat reactions.
-          </p>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('nova')">▶️ Play Sample</button>
-            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-nova" onclick="installVoiceStore('nova', 'Nova (Anime Female)')">⬇️ Install (0ms Offline)</button>
-          </div>
-        </div>
-
-        <!-- Voice 2 -->
-        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-            <div>
-              <div style="font-size: 15px; font-weight: 700; color: #fff;">Kael</div>
-              <div style="font-size: 11px; color: #38bdf8;">Deep FM Radio Announcer</div>
-            </div>
-            <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">Deep / Radio</span>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
-            Resonant, bass-heavy broadcast DJ voice. Ideal for chill late-night talk streams and podcasting.
-          </p>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('kael')">▶️ Play Sample</button>
-            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-kael" onclick="installVoiceStore('kael', 'Kael (Deep Radio)')">⬇️ Install (0ms Offline)</button>
-          </div>
-        </div>
-
-        <!-- Voice 3 -->
-        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-            <div>
-              <div style="font-size: 15px; font-weight: 700; color: #fff;">Arthur</div>
-              <div style="font-size: 11px; color: #38bdf8;">Distinguished British Butler</div>
-            </div>
-            <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">British / Formal</span>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
-            Polite, crisp UK English with formal tone. Reads chat comments with butler-like elegance.
-          </p>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('arthur')">▶️ Play Sample</button>
-            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-arthur" onclick="installVoiceStore('arthur', 'Arthur (British Butler)')">⬇️ Install (0ms Offline)</button>
-          </div>
-        </div>
-
-        <!-- Voice 4 -->
-        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-            <div>
-              <div style="font-size: 15px; font-weight: 700; color: #fff;">Viper</div>
-              <div style="font-size: 11px; color: #38bdf8;">Esports Shoutcaster</div>
-            </div>
-            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">Gaming / FPS</span>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
-            Fast, hype tournament commentator style. Built for high-kill FPS and battle royale streams.
-          </p>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('viper')">▶️ Play Sample</button>
-            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-viper" onclick="installVoiceStore('viper', 'Viper (Esports Caster)')">⬇️ Install (0ms Offline)</button>
-          </div>
-        </div>
-
-        <!-- Voice 5 -->
-        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-            <div>
-              <div style="font-size: 15px; font-weight: 700; color: #fff;">Luna</div>
-              <div style="font-size: 11px; color: #38bdf8;">Calm & Cozy Storyteller</div>
-            </div>
-            <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">Cozy / ASMR</span>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
-            Soft, gentle, relaxing voice. Ideal for art streams, cozy farming games, and quiet evening streams.
-          </p>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('luna')">▶️ Play Sample</button>
-            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-luna" onclick="installVoiceStore('luna', 'Luna (Cozy Narrator)')">⬇️ Install (0ms Offline)</button>
-          </div>
-        </div>
-
-        <!-- Voice 6 -->
-        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-            <div>
-              <div style="font-size: 15px; font-weight: 700; color: #fff;">Thor</div>
-              <div style="font-size: 11px; color: #38bdf8;">Nordic Warrior / Barbarian</div>
-            </div>
-            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">Fantasy / Epic</span>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
-            Thunderous, roaring, epic fantasy character. Turns simple chat messages into battle declarations.
-          </p>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('thor')">▶️ Play Sample</button>
-            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-thor" onclick="installVoiceStore('thor', 'Thor (Nordic Warrior)')">⬇️ Install (0ms Offline)</button>
-          </div>
-        </div>
-      </div>
+      <div id="voice-store-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;"></div>
     </div>
   </div>
 
@@ -1594,6 +1482,63 @@ HTML_CONTENT = """<!DOCTYPE html>
   </footer>
 
   <script>
+    const STORE_CATALOG = [
+      {
+        id: "nova",
+        name: "Nova",
+        subtitle: "High-Energy Anime Female",
+        badge: "Anime / Hype",
+        badgeStyle: "background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);",
+        desc: "Expressive, cheerful, and fast-paced. Perfect for hype gaming and interactive chat reactions.",
+        sample: "Hey chat! Thank you so much for the hype! Let's go!"
+      },
+      {
+        id: "kael",
+        name: "Kael",
+        subtitle: "Deep FM Radio Announcer",
+        badge: "Deep / Radio",
+        badgeStyle: "background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);",
+        desc: "Resonant, bass-heavy broadcast DJ voice. Ideal for chill late-night talk streams and podcasting.",
+        sample: "Welcome in to the late night stream. Sit back, relax, and enjoy the vibe."
+      },
+      {
+        id: "arthur",
+        name: "Arthur",
+        subtitle: "Distinguished British Butler",
+        badge: "British / Formal",
+        badgeStyle: "background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);",
+        desc: "Polite, crisp UK English with formal tone. Reads chat comments with butler-like elegance.",
+        sample: "Good evening everyone. It is an absolute pleasure to be reading your comments."
+      },
+      {
+        id: "viper",
+        name: "Viper",
+        subtitle: "Esports Shoutcaster",
+        badge: "Gaming / FPS",
+        badgeStyle: "background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);",
+        desc: "Fast, hype tournament commentator style. Built for high-kill FPS and battle royale streams.",
+        sample: "Triple kill! Watch the flank! They cannot stop us right now!"
+      },
+      {
+        id: "luna",
+        name: "Luna",
+        subtitle: "Calm & Cozy Storyteller",
+        badge: "Cozy / ASMR",
+        badgeStyle: "background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);",
+        desc: "Soft, gentle, relaxing voice. Ideal for art streams, cozy farming games, and quiet evening streams.",
+        sample: "Welcome to our cozy stream today. I hope you're having a calm and wonderful day."
+      },
+      {
+        id: "thor",
+        name: "Thor",
+        subtitle: "Nordic Warrior / Barbarian",
+        badge: "Fantasy / Epic",
+        badgeStyle: "background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);",
+        desc: "Thunderous, roaring, epic fantasy character. Turns simple chat messages into battle declarations.",
+        sample: "By the thunder gods! We march to victory! Bring on the battle!"
+      }
+    ];
+
     let currentEngine = "instant";
     let currentVolume = 1.0;
     let savedNativeVoice = "";
@@ -1603,6 +1548,8 @@ HTML_CONTENT = """<!DOCTYPE html>
     let activeAudio = null;
     let browserVoices = [];
     let installedStoreVoices = [];
+    let starredVoices = [];
+    let currentPreviewId = null;
     let latestReleaseNotes = "";
     let latestVersionStr = "";
 
@@ -1704,39 +1651,177 @@ HTML_CONTENT = """<!DOCTYPE html>
     function populateBrowserVoices() {
       browserVoices = window.speechSynthesis.getVoices();
       const select = document.getElementById('browser-voice-select');
+      if (!select) return;
       select.innerHTML = '';
       let matchedIndex = -1;
-      
-      // Native voices
+
+      // Group 1: Starred / Favorite Voices (pinned to top)
+      const starredCatalogItems = STORE_CATALOG.filter(v => starredVoices.includes(v.id));
+      if (starredCatalogItems.length > 0) {
+        const starGroup = document.createElement('optgroup');
+        starGroup.label = "⭐ Favorite / Starred Voices";
+        starredCatalogItems.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = "store:" + v.id;
+          opt.textContent = `⭐ ${v.name} (${v.subtitle})`;
+          if (savedNativeVoice === (v.name + " (" + v.subtitle + ")") || savedNativeVoice === v.id || savedNativeVoice === ("store:" + v.id)) {
+            opt.selected = true;
+          }
+          starGroup.appendChild(opt);
+        });
+        select.appendChild(starGroup);
+      }
+
+      // Group 2: Installed Offline Store Voices (not starred)
+      const nonStarredInstalled = installedStoreVoices.filter(id => !starredVoices.includes(id));
+      if (nonStarredInstalled.length > 0) {
+        const instGroup = document.createElement('optgroup');
+        instGroup.label = "Installed Offline Voices";
+        nonStarredInstalled.forEach(vId => {
+          const v = STORE_CATALOG.find(c => c.id === vId);
+          const opt = document.createElement('option');
+          opt.value = "store:" + vId;
+          opt.textContent = `✓ ${v ? v.name : vId} (0ms Offline)`;
+          if (savedNativeVoice === (v ? (v.name + " (" + v.subtitle + ")") : vId) || savedNativeVoice === ("store:" + vId)) {
+            opt.selected = true;
+          }
+          instGroup.appendChild(opt);
+        });
+        select.appendChild(instGroup);
+      }
+
+      // Group 3: System / OS Native Voices
+      const osGroup = document.createElement('optgroup');
+      osGroup.label = "System / OS Native Voices";
       browserVoices.forEach((v, i) => {
         const opt = document.createElement('option');
         opt.value = i;
         opt.textContent = `${v.name} (${v.lang})`;
         if (savedNativeVoice && v.name === savedNativeVoice) {
           matchedIndex = i;
+          opt.selected = true;
         } else if (!savedNativeVoice && matchedIndex === -1 && (v.default || v.name.includes('Natural') || v.lang.startsWith('en'))) {
           matchedIndex = i;
+          opt.selected = true;
         }
-        select.appendChild(opt);
+        osGroup.appendChild(opt);
       });
+      select.appendChild(osGroup);
 
-      // Installed Voice Store voices
-      if (installedStoreVoices.length > 0) {
-        const grp = document.createElement('optgroup');
-        grp.label = "Installed from Voice Store";
-        installedStoreVoices.forEach(sv => {
-          const opt = document.createElement('option');
-          opt.value = "store:" + sv;
-          opt.textContent = `★ ${sv} (0ms Offline)`;
-          if (savedNativeVoice === sv) opt.selected = true;
-          grp.appendChild(opt);
-        });
-        select.appendChild(grp);
-      }
-
-      if (matchedIndex >= 0) {
+      if (matchedIndex >= 0 && !select.value.startsWith('store:')) {
         select.value = matchedIndex;
       }
+    }
+
+    function renderVoiceStoreGrid() {
+      const container = document.getElementById('voice-store-grid');
+      if (!container) return;
+
+      const sortedList = [...STORE_CATALOG].sort((a, b) => {
+        const aStarred = starredVoices.includes(a.id);
+        const bStarred = starredVoices.includes(b.id);
+        if (aStarred && !bStarred) return -1;
+        if (!aStarred && bStarred) return 1;
+        return 0;
+      });
+
+      container.innerHTML = sortedList.map(v => {
+        const isStarred = starredVoices.includes(v.id);
+        const isInstalled = installedStoreVoices.includes(v.id);
+        const isPlayingThis = (currentPreviewId === v.id);
+
+        return `
+          <div class="card" style="margin-bottom: 0; background: #0c1222; border: 1px solid ${isStarred ? '#f59e0b' : '#1e293b'}; position: relative; transition: border-color 0.2s;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 16px; font-weight: 700; color: #fff;">${v.name}</span>
+                  ${isStarred ? '<span style="font-size: 13px; color: #f59e0b;">⭐</span>' : ''}
+                </div>
+                <div style="font-size: 11px; color: #38bdf8;">${v.subtitle}</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button class="chip" onclick="toggleStarVoice('${v.id}')" style="background: ${isStarred ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)'}; color: ${isStarred ? '#f59e0b' : '#94a3b8'}; border: 1px solid ${isStarred ? '#f59e0b' : '#334155'}; font-size: 11px; padding: 3px 8px; cursor: pointer;">
+                  ${isStarred ? '★ Starred' : '☆ Star'}
+                </button>
+                <span class="badge" style="${v.badgeStyle}">${v.badge}</span>
+              </div>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px; line-height: 1.5;">
+              ${v.desc}
+            </p>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn-secondary" style="font-size: 11px; flex: 1;" onclick="togglePreviewVoice('${v.id}')">
+                ${isPlayingThis ? '⏸️ Pause Sample' : '▶️ Play Sample'}
+              </button>
+              <button class="${isInstalled ? 'btn-secondary' : 'btn-primary'}" style="font-size: 11px; flex: 1;" id="btn-voice-${v.id}" onclick="installVoiceStore('${v.id}', '${v.name} (${v.subtitle})')">
+                ${isInstalled ? '✓ Installed' : '⬇️ Install (0ms Offline)'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleStarVoice(vId) {
+      const idx = starredVoices.indexOf(vId);
+      if (idx >= 0) {
+        starredVoices.splice(idx, 1);
+      } else {
+        starredVoices.push(vId);
+      }
+      renderVoiceStoreGrid();
+      populateBrowserVoices();
+      updateSettings();
+    }
+
+    function togglePreviewVoice(vId) {
+      if (currentPreviewId === vId) {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+        currentPreviewId = null;
+        renderVoiceStoreGrid();
+        return;
+      }
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      const v = STORE_CATALOG.find(c => c.id === vId);
+      if (!v) return;
+
+      currentPreviewId = vId;
+      renderVoiceStoreGrid();
+
+      if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(v.sample);
+        u.volume = currentVolume;
+        u.onend = () => {
+          if (currentPreviewId === vId) {
+            currentPreviewId = null;
+            renderVoiceStoreGrid();
+          }
+        };
+        u.onerror = () => {
+          if (currentPreviewId === vId) {
+            currentPreviewId = null;
+            renderVoiceStoreGrid();
+          }
+        };
+        speechSynthesis.speak(u);
+      }
+    }
+
+    function installVoiceStore(vId, vName) {
+      if (!installedStoreVoices.includes(vId)) {
+        installedStoreVoices.push(vId);
+      }
+      savedNativeVoice = vName;
+      renderVoiceStoreGrid();
+      populateBrowserVoices();
+      updateSettings();
     }
 
     if ('speechSynthesis' in window) {
@@ -1778,21 +1863,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
 
     function setEngine(mode) {
-      currentEngine = mode;
-      document.getElementById('opt-instant').className = 'engine-option' + (mode === 'instant' ? ' active' : '');
-      document.getElementById('opt-cloud').className = 'engine-option' + (mode === 'cloud' ? ' active' : '');
-      document.getElementById('instant-voice-block').style.display = (mode === 'instant' ? 'block' : 'none');
-      document.getElementById('cloud-voice-block').style.display = (mode === 'cloud' ? 'block' : 'none');
-      
-      const badge = document.getElementById('latency-badge');
-      if (mode === 'instant') {
-        badge.innerHTML = '⚡ Instant Mode (&lt;50ms)';
-        badge.className = 'badge latency';
-      } else {
-        badge.innerHTML = '☁️ Cloud Mode (~3s)';
-        badge.className = 'badge';
-      }
-      updateSettings();
+      currentEngine = "instant";
     }
 
     ws.onmessage = (event) => {
@@ -1809,26 +1880,23 @@ HTML_CONTENT = """<!DOCTYPE html>
         }
         const cfg = data.config || {};
         if (cfg.username) document.getElementById('username-input').value = cfg.username;
-        if (cfg.engine) setEngine(cfg.engine);
-        if (cfg.voice) document.getElementById('cloud-voice-select').value = cfg.voice;
+        if (cfg.command_prefix !== undefined && document.getElementById('command-prefix')) {
+          document.getElementById('command-prefix').value = cfg.command_prefix;
+        }
+        if (cfg.starred_voices && Array.isArray(cfg.starred_voices)) {
+          starredVoices = cfg.starred_voices;
+        }
+        if (cfg.installed_voices && Array.isArray(cfg.installed_voices)) {
+          installedStoreVoices = cfg.installed_voices;
+        }
         if (cfg.native_voice_name) {
           savedNativeVoice = cfg.native_voice_name;
-          populateBrowserVoices();
         }
         if (cfg.audio_device_id) {
           selectedAudioDevice = cfg.audio_device_id;
         }
-        if (cfg.installed_voices) {
-          installedStoreVoices = cfg.installed_voices;
-          installedStoreVoices.forEach(vId => {
-            const btn = document.getElementById('btn-voice-' + vId);
-            if (btn) {
-              btn.textContent = "✓ Installed";
-              btn.className = "btn-secondary";
-            }
-          });
-          populateBrowserVoices();
-        }
+        renderVoiceStoreGrid();
+        populateBrowserVoices();
         if (cfg.volume !== undefined) {
           document.getElementById('vol-slider').value = cfg.volume;
           document.getElementById('set-vol-slider').value = cfg.volume;
@@ -2077,48 +2145,32 @@ HTML_CONTENT = """<!DOCTYPE html>
       setTimeout(() => { sim.style.display = 'none'; }, 4000);
     }
 
-    function previewVoiceStore(name) {
-      const sampleTexts = {
-        nova: "Hey chat! Thank you so much for the hype! Let's go!",
-        kael: "Welcome in to the late night stream. Sit back, relax, and enjoy the vibe.",
-        arthur: "Good evening everyone. It is an absolute pleasure to be reading your comments.",
-        viper: "Triple kill! Watch the flank! They cannot stop us right now!",
-        luna: "Welcome to our cozy stream today. I hope you're having a calm and wonderful day.",
-        thor: "By the thunder gods! We march to victory! Bring on the battle!"
-      };
-      const text = sampleTexts[name] || "Hello from TikTok Live TTS Studio!";
-      if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance(text);
-        u.volume = currentVolume;
-        speechSynthesis.speak(u);
-      }
-    }
-
-    function installVoiceStore(vId, vName) {
-      if (!installedStoreVoices.includes(vId)) {
-        installedStoreVoices.push(vId);
-        const btn = document.getElementById('btn-voice-' + vId);
-        if (btn) {
-          btn.textContent = "✓ Installed";
-          btn.className = "btn-secondary";
-        }
-        savedNativeVoice = vName;
-        populateBrowserVoices();
-        updateSettings();
-        alert(`Installed '${vName}' successfully!\nIt is now active as an offline 0ms voice.`);
-      }
-    }
-
     async function updateSettings() {
-      const nativeSelect = document.getElementById('browser-voice-select');
-      const selectedNativeVoice = (browserVoices[nativeSelect.value] ? browserVoices[nativeSelect.value].name : savedNativeVoice);
+      const selectEl = document.getElementById('browser-voice-select');
+      let selectedVoiceName = savedNativeVoice;
+      if (selectEl) {
+        const val = selectEl.value;
+        if (val.startsWith('store:')) {
+          const vId = val.replace('store:', '');
+          const v = STORE_CATALOG.find(c => c.id === vId);
+          selectedVoiceName = v ? `${v.name} (${v.subtitle})` : vId;
+        } else {
+          const idx = parseInt(val);
+          if (browserVoices[idx]) selectedVoiceName = browserVoices[idx].name;
+        }
+      }
+      savedNativeVoice = selectedVoiceName;
+
+      const prefixEl = document.getElementById('command-prefix');
       const payload = {
-        engine: currentEngine,
-        voice: document.getElementById('cloud-voice-select').value,
-        native_voice_name: selectedNativeVoice,
+        engine: "instant",
+        voice: "",
+        native_voice_name: savedNativeVoice,
         audio_device_id: selectedAudioDevice,
         installed_voices: installedStoreVoices,
         volume: currentVolume,
+        command_prefix: prefixEl ? prefixEl.value : "",
+        starred_voices: starredVoices,
         cooldown: parseInt(document.getElementById('cooldown-input').value) || 5,
         max_chars: parseInt(document.getElementById('maxlen-input').value) || 120,
         banned_words: document.getElementById('banned-input').value,
@@ -2136,6 +2188,9 @@ HTML_CONTENT = """<!DOCTYPE html>
         body: JSON.stringify(payload)
       });
     }
+
+    // Initial render of Voice Store Catalog
+    renderVoiceStoreGrid();
   </script>
 </body>
 </html>

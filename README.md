@@ -12,11 +12,11 @@ A high-performance, standalone Text-to-Speech (TTS) studio engineered specifical
 * **🎛️ 4-Tab Streamer Dashboard:**
   * **🎙️ Live TTS & Moderation:** Streamer controls, live chat monitor, manual speech trigger, anti-spam automute, and badge gating.
   * **🎬 TikTok Studio Overlay:** Custom subtitle display HUD, URL copy, and TikTok Live Studio setup guide.
-  * **🏪 Voice Store:** Offline neural character voice catalog with interactive Play/Pause audio previews and 1-click installation.
+  * **🏪 Voice Store:** Offline neural character voice catalog with interactive **Play / Pause** audio preview toggles, **⭐ Star / Favorite** voice pinning to the top of your list, and 1-click installation.
   * **⚙️ Settings & Audio Routing:** Audio device selector (`navigator.mediaDevices`), cooldown timers, and safety filters.
 * **🔒 Zero Credentials / Zero Login:** No TikTok password, session token, or official developer registration required.
 * **🛡️ Streamer Moderation & Safety:**
-  * **Command Prefix Filter:** Optionally require comments to start with a prefix (e.g., `.` or `!tts`) before being spoken, with automatic prefix stripping.
+  * **Command Prefix Filter:** Optionally require comments to begin with a trigger prefix (`.`, `/`, or `!`) before being spoken aloud, with automatic prefix stripping so only the message is read.
   * **Fan Club Level Gating:** Limit TTS to dedicated fans (e.g., Level 5+).
   * **Gifter Minimum Coins:** Limit gift announcements to gifts meeting coin thresholds.
   * **Anti-Spam Auto-Mute:** Automatically silences users who repeat the same comment repeatedly.
