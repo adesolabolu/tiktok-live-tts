@@ -37,7 +37,6 @@ import tempfile
 import zipfile
 import shutil
 import subprocess
-import webbrowser
 import httpx
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -48,9 +47,10 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.4.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
-active_port: int = 8080
+DEFAULT_PORT = 28730
+active_port: int = DEFAULT_PORT
 
 # Determine config and asset file location
 if getattr(sys, 'frozen', False):
@@ -67,6 +67,8 @@ DEFAULT_CONFIG = {
     "engine": "instant",
     "voice": "en-US-JennyNeural",
     "native_voice_name": "",
+    "audio_device_id": "default",
+    "installed_voices": [],
     "volume": 1.0,
     "cooldown": 5,
     "max_chars": 120,
@@ -121,13 +123,15 @@ class AppState:
         self.engine: str = cfg.get("engine", "instant")
         self.voice: str = cfg.get("voice", "en-US-JennyNeural")
         self.native_voice_name: str = cfg.get("native_voice_name", "")
+        self.audio_device_id: str = cfg.get("audio_device_id", "default")
+        self.installed_voices: list[str] = cfg.get("installed_voices", [])
         self.volume: float = cfg.get("volume", 1.0)
         self.cooldown: int = cfg.get("cooldown", 5)
         self.max_chars: int = cfg.get("max_chars", 120)
         self.banned_words: list[str] = [w.strip() for w in cfg.get("banned_words", "").split(",") if w.strip()]
         self.banned_words_raw: str = cfg.get("banned_words", "")
         
-        # Bundle 1 & Fan Club Controls
+        # Audience & Gating Controls
         self.role_filter: str = cfg.get("role_filter", "anyone")
         self.min_fan_level: int = cfg.get("min_fan_level", 0)
         self.fan_announcements_enabled: bool = cfg.get("fan_announcements_enabled", True)
@@ -149,6 +153,8 @@ class AppState:
             "engine": self.engine,
             "voice": self.voice,
             "native_voice_name": self.native_voice_name,
+            "audio_device_id": self.audio_device_id,
+            "installed_voices": self.installed_voices,
             "volume": self.volume,
             "cooldown": self.cooldown,
             "max_chars": self.max_chars,
@@ -176,6 +182,8 @@ class SettingsRequest(BaseModel):
     engine: Optional[str] = None
     voice: Optional[str] = None
     native_voice_name: Optional[str] = None
+    audio_device_id: Optional[str] = None
+    installed_voices: Optional[list[str]] = None
     volume: Optional[float] = None
     cooldown: Optional[int] = None
     max_chars: Optional[int] = None
@@ -449,19 +457,27 @@ async def startup():
 async def api_version():
     return {
         "current_version": CURRENT_VERSION,
-        "repo": GITHUB_REPO
+        "repo": GITHUB_REPO,
+        "active_port": active_port
     }
+
+def _parse_version(v: str):
+    try:
+        return tuple(int(x) for x in v.strip().lstrip("v").split(".") if x.isdigit())
+    except Exception:
+        return (0, 0, 0)
 
 @app.get("/api/check-update")
 async def api_check_update():
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url, headers={"User-Agent": "TikTokLiveTTS-App"})
             if resp.status_code == 200:
                 data = resp.json()
-                latest_tag = data.get("tag_name", "").lstrip("v")
-                has_update = latest_tag and latest_tag > CURRENT_VERSION
+                raw_tag = data.get("tag_name", "").strip()
+                latest_tag = raw_tag.lstrip("v")
+                has_update = bool(latest_tag) and _parse_version(latest_tag) > _parse_version(CURRENT_VERSION)
                 return {
                     "has_update": has_update,
                     "current_version": CURRENT_VERSION,
@@ -475,16 +491,9 @@ async def api_check_update():
         "has_update": False,
         "current_version": CURRENT_VERSION,
         "latest_version": CURRENT_VERSION,
-        "release_url": f"https://github.com/{GITHUB_REPO}/releases"
+        "release_url": f"https://github.com/{GITHUB_REPO}/releases",
+        "release_notes": ""
     }
-
-@app.post("/api/open-browser")
-async def api_open_browser():
-    try:
-        webbrowser.open(f"http://127.0.0.1:{active_port}")
-        return {"status": "ok"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 @app.post("/api/install-update")
 async def api_install_update():
@@ -508,7 +517,7 @@ async def api_install_update():
             os.makedirs(temp_dir, exist_ok=True)
             zip_dest = os.path.join(temp_dir, "update.zip")
 
-            await broadcast({"type": "update_progress", "status": "Downloading update (10%)...", "percent": 10})
+            await broadcast({"type": "update_progress", "status": "Downloading update package (15%)...", "percent": 15})
 
             async with client.stream("GET", download_url, follow_redirects=True) as stream:
                 total_bytes = int(stream.headers.get("content-length", 0))
@@ -518,10 +527,10 @@ async def api_install_update():
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total_bytes > 0:
-                            pct = int((downloaded / total_bytes) * 75) + 10
+                            pct = int((downloaded / total_bytes) * 75) + 15
                             await broadcast({"type": "update_progress", "status": f"Downloading ({pct}%)...", "percent": pct})
 
-            await broadcast({"type": "update_progress", "status": "Extracting update package...", "percent": 90})
+            await broadcast({"type": "update_progress", "status": "Extracting update files...", "percent": 92})
             extract_dir = os.path.join(temp_dir, "extracted")
             if os.path.exists(extract_dir):
                 shutil.rmtree(extract_dir, ignore_errors=True)
@@ -539,27 +548,51 @@ async def api_install_update():
             target_dir = BASE_DIR
             target_exe = os.path.join(target_dir, "TikTokLiveTTS.exe")
 
+            # Create bulletproof batch updater with PID check and no error spam
+            current_pid = os.getpid()
             bat_path = os.path.join(temp_dir, "apply_update.bat")
             with open(bat_path, "w", encoding="utf-8") as bf:
                 bf.write(f"""@echo off
+setlocal
+set "TARGET_DIR={target_dir}"
+set "SOURCE_DIR={source_folder}"
+set "TARGET_EXE={target_exe}"
+set "OLD_PID={current_pid}"
+
+:: Terminate old process tree cleanly
+taskkill /F /T /PID %OLD_PID% >nul 2>&1
 timeout /t 2 /nobreak >nul
-robocopy "{source_folder}" "{target_dir}" /E /IS /IT /nfl /ndl /njh /njs >nul
-start "" "{target_exe}"
+
+:wait_loop
+tasklist /fi "PID eq %OLD_PID%" 2>nul | find "%OLD_PID%" >nul
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto wait_loop
+)
+
+:: Wait for file handles to unlock
+timeout /t 2 /nobreak >nul
+
+:: Robocopy with max 2 retries, 1s wait, and quiet logs
+robocopy "%SOURCE_DIR%" "%TARGET_DIR%" /E /IS /IT /R:2 /W:1 /nfl /ndl /njh /njs >nul
+
+:: Launch updated app cleanly
+start "" "%TARGET_EXE%"
 exit
 """)
 
-            await broadcast({"type": "update_progress", "status": "Update installed! Restarting app...", "percent": 100})
+            await broadcast({"type": "update_progress", "status": "Restarting application now...", "percent": 100})
 
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
             subprocess.Popen(["cmd.exe", "/c", bat_path], creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, close_fds=True)
 
             def do_exit():
-                time.sleep(1.2)
+                time.sleep(1.0)
                 os._exit(0)
 
             threading.Thread(target=do_exit, daemon=True).start()
-            return {"status": "ok", "message": "Update downloaded, restarting in 2 seconds..."}
+            return {"status": "ok", "message": "Update downloaded, restarting..."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -614,6 +647,10 @@ async def api_settings(req: SettingsRequest):
         state.voice = req.voice
     if req.native_voice_name is not None:
         state.native_voice_name = req.native_voice_name
+    if req.audio_device_id is not None:
+        state.audio_device_id = req.audio_device_id
+    if req.installed_voices is not None:
+        state.installed_voices = req.installed_voices
     if req.volume is not None:
         state.volume = req.volume
     if req.cooldown is not None:
@@ -652,6 +689,7 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.send_json({
         "type": "init",
         "version": CURRENT_VERSION,
+        "active_port": active_port,
         "status": state.status,
         "message": state.status_msg,
         "config": state.export_config(),
@@ -695,15 +733,15 @@ HTML_CONTENT = """<!DOCTYPE html>
     header {
       background: #0f172a;
       border-bottom: 1px solid var(--card-border);
-      padding: 14px 28px;
+      padding: 12px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
     .logo-group { display: flex; align-items: center; gap: 12px; }
     .logo-icon { font-size: 24px; }
-    .logo-title { font-size: 19px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-    .version-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #1e293b; color: #94a3b8; font-weight: 600; margin-left: 6px; }
+    .logo-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    .version-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #1e293b; color: #94a3b8; font-weight: 600; margin-left: 4px; }
     .header-badges { display: flex; gap: 10px; align-items: center; }
     .badge {
       display: inline-flex;
@@ -722,36 +760,65 @@ HTML_CONTENT = """<!DOCTYPE html>
     .badge.latency { background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 
-    #update-banner {
-      display: none;
-      background: linear-gradient(90deg, #1e3a8a, #0284c7);
-      color: #fff;
-      padding: 9px 24px;
-      font-size: 13px;
-      font-weight: 600;
-      text-align: center;
-      justify-content: center;
+    /* Compact Update Pill in Header */
+    .update-pill {
+      display: inline-flex;
       align-items: center;
-      gap: 12px;
-    }
-    #update-banner a {
-      color: #38bdf8;
-      background: rgba(255, 255, 255, 0.15);
-      padding: 3px 10px;
-      border-radius: 5px;
-      text-decoration: none;
+      gap: 8px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 12px;
       font-weight: 700;
+      background: linear-gradient(90deg, #1e40af, #0284c7);
+      color: #fff;
+      border: 1px solid #38bdf8;
+      cursor: pointer;
+      animation: pulseGlow 2.5s infinite;
+      transition: transform 0.2s;
+    }
+    .update-pill:hover { transform: scale(1.04); }
+    .update-pulse { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 8px rgba(56, 189, 248, 0.4); }
+      50% { box-shadow: 0 0 16px rgba(56, 189, 248, 0.8); }
     }
 
-    .main-container {
+    /* Tabbed Navigation Bar */
+    .nav-bar {
+      display: flex;
+      gap: 8px;
+      padding: 0 28px;
+      background: #0f172a;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .nav-tab {
+      padding: 12px 18px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .nav-tab:hover { color: #fff; }
+    .nav-tab.active {
+      color: var(--accent-cyan);
+      border-bottom-color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.05);
+    }
+    .tab-content { display: none; padding: 20px 28px; flex: 1; max-width: 1500px; margin: 0 auto; width: 100%; }
+    .tab-content.active { display: block; }
+
+    /* Layout Containers */
+    .two-col-grid {
       display: grid;
       grid-template-columns: 440px 1fr;
       gap: 20px;
-      padding: 20px 28px;
-      flex: 1;
-      max-width: 1500px;
-      margin: 0 auto;
-      width: 100%;
     }
     .card {
       background: var(--card-bg);
@@ -868,7 +935,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       cursor: pointer;
     }
 
-    /* Now Speaking Card */
+    /* Speaking Display Card */
     .now-speaking-card {
       background: linear-gradient(135deg, #131b2e 0%, #172554 100%);
       border: 1px solid #1e3a8a;
@@ -927,6 +994,81 @@ HTML_CONTENT = """<!DOCTYPE html>
     .log-text { color: #f1f5f9; }
     .log-time { font-size: 11px; color: #64748b; margin-left: 10px; white-space: nowrap; }
 
+    /* Soundwave Equalizer */
+    .equalizer {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 20px;
+      min-width: 18px;
+    }
+    .bar {
+      width: 3px;
+      background: #38bdf8;
+      border-radius: 2px;
+      animation: bounce 0.8s ease-in-out infinite alternate;
+    }
+    .bar:nth-child(2) { animation-delay: 0.2s; height: 14px; background: #06b6d4; }
+    .bar:nth-child(3) { animation-delay: 0.4s; height: 20px; background: #10b981; }
+    .bar:nth-child(4) { animation-delay: 0.1s; height: 10px; background: #38bdf8; }
+    @keyframes bounce { 0% { height: 4px; } 100% { height: 20px; } }
+
+    /* In-App What's New Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal-card {
+      background: #0f172a;
+      border: 1px solid #1e3a8a;
+      border-radius: 14px;
+      width: 90%;
+      max-width: 520px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(56, 189, 248, 0.2);
+      overflow: hidden;
+      animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalPop {
+      0% { opacity: 0; transform: scale(0.95); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .modal-header {
+      padding: 16px 20px;
+      background: #131b2e;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-close {
+      background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+    }
+    .modal-close:hover { color: #fff; background: #1e293b; }
+    .modal-body {
+      padding: 20px;
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.6;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .modal-body ul { margin-left: 20px; margin-top: 8px; }
+    .modal-body li { margin-bottom: 6px; }
+    .modal-footer {
+      padding: 14px 20px;
+      background: #0b1120;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
     /* Footer Legal Disclaimer */
     footer {
       background: #090d16;
@@ -938,24 +1080,43 @@ HTML_CONTENT = """<!DOCTYPE html>
       justify-content: space-between;
       align-items: center;
     }
-    footer a { color: #94a3b8; text-decoration: none; }
-    footer a:hover { color: #fff; text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div id="update-banner">
-    <span id="update-text">🚀 A new version of TikTok Live TTS is available!</span>
-    <button id="update-btn" class="btn-primary" style="padding: 4px 12px; font-size: 12px;" onclick="installUpdate()">⚡ 1-Click Update & Restart</button>
-    <a id="update-link" href="#" target="_blank" style="margin-left: 8px;">View Changelog</a>
+  <!-- In-App What's New Modal -->
+  <div id="update-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 22px;">🚀</span>
+          <div>
+            <div id="modal-title" style="font-size: 16px; font-weight: 700; color: #fff;">Update Available</div>
+            <div id="modal-subtitle" style="font-size: 12px; color: #94a3b8;">TikTok Live TTS Studio</div>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closeUpdateModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modal-changelog">
+        Loading release details...
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" style="flex: 0 0 100px;" onclick="closeUpdateModal()">Later</button>
+        <button id="modal-update-btn" class="btn-primary" onclick="installUpdate()">⚡ Update & Restart Now</button>
+      </div>
+    </div>
   </div>
 
   <header>
     <div class="logo-group">
       <span class="logo-icon">🎙️</span>
       <span class="logo-title">TikTok Live TTS Studio</span>
-      <span class="version-tag" id="app-version">v1.3.0</span>
+      <span class="version-tag" id="app-version">v1.4.0</span>
     </div>
     <div class="header-badges">
+      <button id="update-pill" class="update-pill" style="display: none;" onclick="openUpdateModal()">
+        <span class="update-pulse"></span>
+        <span id="update-pill-text">v1.4.1 Update Ready</span>
+      </button>
       <div id="latency-badge" class="badge latency">
         <span>⚡ Real-Time Mode (&lt;50ms)</span>
       </div>
@@ -966,189 +1127,412 @@ HTML_CONTENT = """<!DOCTYPE html>
     </div>
   </header>
 
-  <div class="main-container">
-    <!-- Left Column: Settings & Controls -->
-    <div>
-      <!-- 1. Connection Card -->
-      <div class="card">
-        <div class="card-title">Stream Connection</div>
-        <label>TikTok @Username (Auto-Saved)</label>
-        <input type="text" id="username-input" placeholder="e.g. your_username" />
-        <div class="btn-row">
-          <button class="btn-primary" onclick="connectStream()">Connect</button>
-          <button class="btn-secondary" onclick="disconnectStream()">Disconnect</button>
-        </div>
-        <p id="status-msg" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></p>
-      </div>
+  <!-- Tabbed Navigation Bar -->
+  <div class="nav-bar">
+    <button id="nav-btn-tts" class="nav-tab active" onclick="switchTab('tts')">🎙️ Live TTS & Moderation</button>
+    <button id="nav-btn-overlay" class="nav-tab" onclick="switchTab('overlay')">📺 TikTok Studio Overlay</button>
+    <button id="nav-btn-store" class="nav-tab" onclick="switchTab('store')">🏪 Voice Store (Offline 0ms)</button>
+    <button id="nav-btn-settings" class="nav-tab" onclick="switchTab('settings')">⚙️ Settings & Audio Routing</button>
+  </div>
 
-      <!-- 2. Voice Engine Card -->
-      <div class="card">
-        <div class="card-title">Voice & Audio Engine</div>
-        <div class="engine-toggle">
-          <div id="opt-instant" class="engine-option active" onclick="setEngine('instant')">
-            ⚡ Instant Native (&lt;50ms)
+  <!-- TAB 1: Live TTS & Moderation -->
+  <div id="tab-tts" class="tab-content active">
+    <div class="two-col-grid">
+      <!-- Left Column: Controls -->
+      <div>
+        <!-- 1. Connection Card -->
+        <div class="card">
+          <div class="card-title">Stream Connection</div>
+          <label>TikTok @Username (Auto-Saved)</label>
+          <input type="text" id="username-input" placeholder="e.g. your_username" />
+          <div class="btn-row">
+            <button class="btn-primary" onclick="connectStream()">Connect</button>
+            <button class="btn-secondary" onclick="disconnectStream()">Disconnect</button>
           </div>
-          <div id="opt-cloud" class="engine-option" onclick="setEngine('cloud')">
-            ☁️ Cloud Neural (HD)
+          <p id="status-msg" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;"></p>
+        </div>
+
+        <!-- 2. Voice Engine Card -->
+        <div class="card">
+          <div class="card-title">Voice & Audio Engine</div>
+          <div class="engine-toggle">
+            <div id="opt-instant" class="engine-option active" onclick="setEngine('instant')">
+              ⚡ Instant Native (&lt;50ms)
+            </div>
+            <div id="opt-cloud" class="engine-option" onclick="setEngine('cloud')">
+              ☁️ Cloud Neural (HD)
+            </div>
+          </div>
+
+          <div id="instant-voice-block">
+            <label>Native Browser / OS Voice</label>
+            <select id="browser-voice-select"></select>
+            <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
+          </div>
+
+          <div id="cloud-voice-block" style="display: none;">
+            <label>Microsoft Cloud Neural Voice (HD)</label>
+            <select id="cloud-voice-select" onchange="updateSettings()">
+              <optgroup label="Popular Voices (US English)">
+                <option value="en-US-JennyNeural">Jenny (US Female - Natural & Expressive)</option>
+                <option value="en-US-GuyNeural">Guy (US Male - Clear & Dynamic)</option>
+                <option value="en-US-AvaNeural">Ava (US Female - Warm & Friendly)</option>
+                <option value="en-US-ChristopherNeural">Christopher (US Male - Energetic / Hype)</option>
+                <option value="en-US-AriaNeural">Aria (US Female - Smooth & Clear)</option>
+                <option value="en-US-AndrewNeural">Andrew (US Male - Casual Conversation)</option>
+                <option value="en-US-BrianNeural">Brian (US Male - Deep Radio Announcer)</option>
+                <option value="en-US-EmmaNeural">Emma (US Female - Cheerful & Bright)</option>
+              </optgroup>
+              <optgroup label="International English">
+                <option value="en-GB-SoniaNeural">Sonia (British Female - Crisp)</option>
+                <option value="en-GB-RyanNeural">Ryan (British Male - Friendly)</option>
+                <option value="en-GB-LibbyNeural">Libby (British Female - Storyteller)</option>
+                <option value="en-AU-NatashaNeural">Natasha (Australian Female)</option>
+                <option value="en-CA-ClaraNeural">Clara (Canadian Female)</option>
+                <option value="en-IN-NeerjaNeural">Neerja (Indian English Female)</option>
+              </optgroup>
+            </select>
+            <p style="font-size: 11px; color: #f59e0b; margin-top: 5px;">High fidelity cloud voice. Requires ~2-3s streaming buffer.</p>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <label>Volume: <span id="vol-label">100%</span></label>
+            <input type="range" id="vol-slider" min="0" max="1" step="0.05" value="1" style="width: 100%;" oninput="changeVolume(this.value)" />
           </div>
         </div>
 
-        <div id="instant-voice-block">
-          <label>Native Browser / OS Voice</label>
-          <select id="browser-voice-select"></select>
-          <p style="font-size: 11px; color: #34d399; margin-top: 5px;">⚡ Zero delay (&lt;50ms). Speaks instantaneously when viewer chats.</p>
-        </div>
-
-        <div id="cloud-voice-block" style="display: none;">
-          <label>Microsoft Cloud Neural Voice (HD)</label>
-          <select id="cloud-voice-select" onchange="updateSettings()">
-            <optgroup label="Popular Voices (US English)">
-              <option value="en-US-JennyNeural">Jenny (US Female - Natural & Expressive)</option>
-              <option value="en-US-GuyNeural">Guy (US Male - Clear & Dynamic)</option>
-              <option value="en-US-AvaNeural">Ava (US Female - Warm & Friendly)</option>
-              <option value="en-US-ChristopherNeural">Christopher (US Male - Energetic / Hype)</option>
-              <option value="en-US-AriaNeural">Aria (US Female - Smooth & Clear)</option>
-              <option value="en-US-AndrewNeural">Andrew (US Male - Casual Conversation)</option>
-              <option value="en-US-BrianNeural">Brian (US Male - Deep Radio Announcer)</option>
-              <option value="en-US-EmmaNeural">Emma (US Female - Cheerful & Bright)</option>
-            </optgroup>
-            <optgroup label="International English">
-              <option value="en-GB-SoniaNeural">Sonia (British Female - Crisp)</option>
-              <option value="en-GB-RyanNeural">Ryan (British Male - Friendly)</option>
-              <option value="en-GB-LibbyNeural">Libby (British Female - Storyteller)</option>
-              <option value="en-AU-NatashaNeural">Natasha (Australian Female)</option>
-              <option value="en-CA-ClaraNeural">Clara (Canadian Female)</option>
-              <option value="en-IN-NeerjaNeural">Neerja (Indian English Female)</option>
-            </optgroup>
+        <!-- 3. Fan Club & Audience Permissions -->
+        <div class="card">
+          <div class="card-title">Audience & Fan Club Access</div>
+          <label>Who Can Trigger Text-to-Speech?</label>
+          <select id="role-filter" onchange="updateSettings()" style="margin-bottom: 12px;">
+            <option value="anyone">Everyone (Open to all chat)</option>
+            <option value="followers">Followers Only</option>
+            <option value="fan_club">Fan Club Members Only (Closes TTS for non-members)</option>
+            <option value="subs">Subscribers Only</option>
           </select>
-          <p style="font-size: 11px; color: #f59e0b; margin-top: 5px;">High fidelity cloud voice. Requires ~2-3s streaming buffer.</p>
-        </div>
 
-        <div style="margin-top: 12px;">
-          <label>Volume: <span id="vol-label">100%</span></label>
-          <input type="range" id="vol-slider" min="0" max="1" step="0.05" value="1" style="width: 100%;" oninput="changeVolume(this.value)" />
-        </div>
-      </div>
+          <label>Minimum Fan Club Level to Speak (0 = Any Level)</label>
+          <input type="number" id="min-fan-level" min="0" max="50" value="0" onchange="updateSettings()" style="margin-bottom: 6px;" />
+          <p style="font-size: 11px; color: var(--text-muted);">Set to e.g. <b>5</b> to close TTS for viewers below Level 5 or not in the fan club.</p>
 
-      <!-- 3. Fan Club & Audience Permissions (User Feature) -->
-      <div class="card">
-        <div class="card-title">Audience & Fan Club Access</div>
-        <label>Who Can Trigger Text-to-Speech?</label>
-        <select id="role-filter" onchange="updateSettings()" style="margin-bottom: 12px;">
-          <option value="anyone">Everyone (Open to all chat)</option>
-          <option value="followers">Followers Only</option>
-          <option value="fan_club">Fan Club Members Only (Closes TTS for non-members)</option>
-          <option value="subs">Subscribers Only</option>
-        </select>
-
-        <label>Minimum Fan Club Level to Speak (0 = Any Level)</label>
-        <input type="number" id="min-fan-level" min="0" max="50" value="0" onchange="updateSettings()" style="margin-bottom: 6px;" />
-        <p style="font-size: 11px; color: var(--text-muted);">Set to e.g. <b>5</b> to close TTS for viewers below Level 5 or not in the fan club.</p>
-
-        <div class="toggle-row" style="margin-top: 10px;">
-          <label for="fan-announce-toggle">Announce New Fans & Subs (TTS + Chime)</label>
-          <input type="checkbox" id="fan-announce-toggle" checked onchange="updateSettings()" />
-        </div>
-      </div>
-
-      <!-- 4. Gift Controls & Milestones -->
-      <div class="card">
-        <div class="card-title">Gift Callouts & Sound Alerts</div>
-        <div class="toggle-row">
-          <label for="gift-tts-toggle">Speak Gift Announcements</label>
-          <input type="checkbox" id="gift-tts-toggle" checked onchange="updateSettings()" />
-        </div>
-        <div class="toggle-row">
-          <label for="gift-sound-toggle">Play Gift Alert Chime Sound</label>
-          <input type="checkbox" id="gift-sound-toggle" checked onchange="updateSettings()" />
-        </div>
-        <label style="margin-top: 8px;">Minimum Gift Coins for Speech</label>
-        <input type="number" id="gift-min-coins" min="1" max="10000" value="1" onchange="updateSettings()" />
-        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Ignore cheap 1-coin spam and only speak bigger gifts.</p>
-      </div>
-
-      <!-- 5. Anti-Spam & Moderation -->
-      <div class="card">
-        <div class="card-title">Safety & Anti-Troll</div>
-        <div class="toggle-row">
-          <label for="spam-automute-toggle">Auto-Mute Rapid Spammers (3 msgs / 10s)</label>
-          <input type="checkbox" id="spam-automute-toggle" checked onchange="updateSettings()" />
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
-          <div>
-            <label>Cooldown (sec)</label>
-            <input type="number" id="cooldown-input" value="5" min="1" max="60" onchange="updateSettings()" />
-          </div>
-          <div>
-            <label>Max Characters</label>
-            <input type="number" id="maxlen-input" value="120" min="20" max="300" onchange="updateSettings()" />
+          <div class="toggle-row" style="margin-top: 10px;">
+            <label for="fan-announce-toggle">Announce New Fans & Subs (TTS + Chime)</label>
+            <input type="checkbox" id="fan-announce-toggle" checked onchange="updateSettings()" />
           </div>
         </div>
 
-        <label style="margin-top: 10px;">Banned Words (comma separated)</label>
-        <input type="text" id="banned-input" placeholder="badword1, troll2" onchange="updateSettings()" />
+        <!-- 4. Gift Controls & Milestones -->
+        <div class="card">
+          <div class="card-title">Gift Callouts & Sound Alerts</div>
+          <div class="toggle-row">
+            <label for="gift-tts-toggle">Speak Gift Announcements</label>
+            <input type="checkbox" id="gift-tts-toggle" checked onchange="updateSettings()" />
+          </div>
+          <div class="toggle-row">
+            <label for="gift-sound-toggle">Play Gift Alert Chime Sound</label>
+            <input type="checkbox" id="gift-sound-toggle" checked onchange="updateSettings()" />
+          </div>
+          <label style="margin-top: 8px;">Minimum Gift Coins for Speech</label>
+          <input type="number" id="gift-min-coins" min="1" max="10000" value="1" onchange="updateSettings()" />
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Ignore cheap 1-coin spam and only speak bigger gifts.</p>
+        </div>
+
+        <!-- 5. Anti-Spam & Moderation -->
+        <div class="card">
+          <div class="card-title">Safety & Anti-Troll</div>
+          <div class="toggle-row">
+            <label for="spam-automute-toggle">Auto-Mute Rapid Spammers (3 msgs / 10s)</label>
+            <input type="checkbox" id="spam-automute-toggle" checked onchange="updateSettings()" />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+            <div>
+              <label>Cooldown (sec)</label>
+              <input type="number" id="cooldown-input" value="5" min="1" max="60" onchange="updateSettings()" />
+            </div>
+            <div>
+              <label>Max Characters</label>
+              <input type="number" id="maxlen-input" value="120" min="20" max="300" onchange="updateSettings()" />
+            </div>
+          </div>
+
+          <label style="margin-top: 10px;">Banned Words (comma separated)</label>
+          <input type="text" id="banned-input" placeholder="badword1, troll2" onchange="updateSettings()" />
+        </div>
+
+        <!-- 6. Test Audio Sandbox -->
+        <div class="card">
+          <div class="card-title">Test Audio Sandbox</div>
+          <div class="preset-chips">
+            <span class="chip" onclick="applyPreset('Welcome to the livestream everyone!')">👋 Welcome</span>
+            <span class="chip" onclick="applyPreset('Thank you for the roses and gifts!')">🌹 Thanks for Gift</span>
+            <span class="chip" onclick="applyPreset('Let\'s go! Hype in the chat!')">🔥 Hype</span>
+            <span class="chip" onclick="applyPreset('GG on that round! Intense match.')">🎮 GG Match</span>
+            <span class="chip" onclick="applyPreset('Shoutout to the top gifter on the leaderboard!')">👑 Leaderboard</span>
+          </div>
+          <input type="text" id="test-text" placeholder="Type or click a preset above..." />
+          <button class="btn-primary" style="margin-top: 8px; width: 100%;" onclick="sendTestSpeech()">Speak Test Message</button>
+        </div>
       </div>
 
-      <!-- 6. Test Audio Sandbox with Presets -->
-      <div class="card">
-        <div class="card-title">Test Audio Sandbox</div>
-        <div class="preset-chips">
-          <span class="chip" onclick="applyPreset('Welcome to the livestream everyone!')">👋 Welcome</span>
-          <span class="chip" onclick="applyPreset('Thank you for the roses and gifts!')">🌹 Thanks for Gift</span>
-          <span class="chip" onclick="applyPreset('Let\'s go! Hype in the chat!')">🔥 Hype</span>
-          <span class="chip" onclick="applyPreset('GG on that round! Intense match.')">🎮 GG Match</span>
-          <span class="chip" onclick="applyPreset('Shoutout to the top gifter on the leaderboard!')">👑 Leaderboard</span>
+      <!-- Right Column: Speaking Monitor & Live Chat -->
+      <div>
+        <div class="card now-speaking-card">
+          <div class="card-title">
+            <span>Now Speaking</span>
+            <span style="font-size: 13px; font-weight: normal; color: #93c5fd;">Queue: <span id="queue-count">0</span> items</span>
+          </div>
+          <div class="speaking-display">
+            <div id="spk-user" class="speaking-user" style="display: none;"></div>
+            <div id="spk-text" class="speaking-text speaking-idle">No audio currently playing. Waiting for chat...</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn-danger" onclick="skipAudio()">⏹️ Skip Message</button>
+            <button class="btn-secondary" onclick="clearQueue()">🗑️ Clear Queue</button>
+          </div>
         </div>
-        <input type="text" id="test-text" placeholder="Type or click a preset above..." />
-        <button class="btn-primary" style="margin-top: 8px; width: 100%;" onclick="sendTestSpeech()">Speak Test Message</button>
-      </div>
 
-      <!-- 7. OBS & Live Studio Overlay Card -->
-      <div class="card" style="border: 1px solid #0284c7; background: linear-gradient(135deg, #0b1329 0%, #075985 100%);">
-        <div class="card-title" style="color: #38bdf8; margin-bottom: 6px;">
-          <span>📺 Transparent OBS & Live Studio Overlay</span>
-        </div>
-        <p style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px; line-height: 1.3;">
-          Add floating live subtitles & gift alerts onto your stream. Add as a <b>Browser Source</b> in OBS or TikTok Live Studio (Width: 850, Height: 250).
-        </p>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="overlay-url" readonly style="background: rgba(0,0,0,0.5); font-family: monospace; font-size: 11px; color: #38bdf8;" />
-          <button class="btn-primary" style="flex: 0 0 110px; font-size: 11px; padding: 6px 10px;" onclick="copyOverlayUrl()">📋 Copy URL</button>
-          <button class="btn-secondary" style="flex: 0 0 80px; font-size: 11px; padding: 6px 10px;" onclick="previewOverlay()">👁️ Preview</button>
+        <div class="card">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <span>Live Chat & Gift Activity</span>
+            <div style="display: flex; gap: 5px;">
+              <button class="chip" id="flt-all" style="background: var(--accent-cyan); color: #000;" onclick="filterLog('all')">All</button>
+              <button class="chip" id="flt-spoken" onclick="filterLog('spoken')">🗣️ Spoken</button>
+              <button class="chip" id="flt-gifts" onclick="filterLog('gifts')">🎁 Gifts</button>
+              <button class="chip" id="flt-blocked" onclick="filterLog('blocked')">🚫 Filtered</button>
+            </div>
+          </div>
+          <div id="log-list" class="log-container">
+            <div style="color: #64748b; text-align: center; margin-top: 40px;">Live comments and gifts will stream here when connected...</div>
+          </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Right Column: Speaking Monitor & Live Chat -->
-    <div>
-      <div class="card now-speaking-card">
-        <div class="card-title">
-          <span>Now Speaking</span>
-          <span style="font-size: 13px; font-weight: normal; color: #93c5fd;">Queue: <span id="queue-count">0</span> items</span>
+  <!-- TAB 2: TikTok Studio Overlay -->
+  <div id="tab-overlay" class="tab-content">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <div class="card" style="border: 1px solid #0284c7; background: linear-gradient(135deg, #0b1329 0%, #075985 100%);">
+        <div class="card-title" style="color: #38bdf8;">
+          <span>📺 TikTok Live Studio Setup</span>
         </div>
-        <div class="speaking-display">
-          <div id="spk-user" class="speaking-user" style="display: none;"></div>
-          <div id="spk-text" class="speaking-text speaking-idle">No audio currently playing. Waiting for chat...</div>
+        <p style="font-size: 13px; color: #e2e8f0; line-height: 1.6; margin-bottom: 14px;">
+          Add real-time floating chat subtitles & animated gift celebration alerts directly onto your live broadcast with a transparent background.
+        </p>
+        <div style="background: rgba(0,0,0,0.4); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">3-STEP SETUP IN TIKTOK LIVE STUDIO:</div>
+          <ol style="font-size: 12px; color: #cbd5e1; margin-left: 18px; line-height: 1.7;">
+            <li>Click <b>Add Source</b> at the bottom of TikTok Live Studio.</li>
+            <li>Select <b>Link / Browser Source</b>.</li>
+            <li>Paste your private overlay link below and set <b>Width: 850</b>, <b>Height: 250</b>.</li>
+          </ol>
+        </div>
+        <label>Your Live Transparent Overlay URL</label>
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <input type="text" id="overlay-url" readonly style="background: rgba(0,0,0,0.6); font-family: monospace; font-size: 12px; color: #38bdf8;" />
+          <button class="btn-primary" style="flex: 0 0 120px;" onclick="copyOverlayUrl()">📋 Copy URL</button>
         </div>
         <div class="btn-row">
-          <button class="btn-danger" onclick="skipAudio()">⏹️ Skip Message</button>
-          <button class="btn-secondary" onclick="clearQueue()">🗑️ Clear Queue</button>
+          <button class="btn-secondary" onclick="testOverlaySubtitle()">⚡ Trigger Test Subtitle</button>
+          <button class="btn-secondary" onclick="testOverlayGift()">🎁 Trigger Test Gift</button>
         </div>
       </div>
 
+      <!-- Right Column: Simulator -->
       <div class="card">
-        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <span>Live Chat & Gift Activity</span>
-          <div style="display: flex; gap: 5px;">
-            <button class="chip" id="flt-all" style="background: var(--accent-cyan); color: #000;" onclick="filterLog('all')">All</button>
-            <button class="chip" id="flt-spoken" onclick="filterLog('spoken')">🗣️ Spoken</button>
-            <button class="chip" id="flt-gifts" onclick="filterLog('gifts')">🎁 Gifts</button>
-            <button class="chip" id="flt-blocked" onclick="filterLog('blocked')">🚫 Filtered</button>
+        <div class="card-title">
+          <span>Live Overlay Preview Simulator</span>
+          <span style="font-size: 11px; color: var(--text-muted);">Real-time broadcast preview</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          This preview simulates how subtitles and gift popups appear over your stream video:
+        </p>
+        <div style="background: #020617; border: 1px dashed #334155; border-radius: 12px; height: 260px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 20px; position: relative; overflow: hidden;">
+          <div style="position: absolute; top: 12px; left: 14px; font-size: 11px; color: #64748b; font-weight: 600;">[STREAM VIDEO / GAMEPLAY BACKGROUND]</div>
+          
+          <div id="sim-gift" style="display: none; position: absolute; top: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); border: 2px solid #fde68a; border-radius: 12px; padding: 10px 20px; color: #000; font-weight: 800; font-size: 14px; box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);">
+            🎁 GamerFan99 Sent 10x Roses!
+          </div>
+
+          <div id="sim-subtitle" style="display: flex; align-items: center; gap: 14px; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px; padding: 14px 20px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <div class="equalizer" style="height: 18px;">
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+            </div>
+            <div>
+              <div style="font-size: 12px; font-weight: 800; color: #38bdf8;">
+                <span class="badge-fan">LV.5</span> GamerFan99
+              </div>
+              <div id="sim-sub-text" style="font-size: 15px; font-weight: 600; color: #fff;">Let's get this win! Amazing stream today!</div>
+            </div>
           </div>
         </div>
-        <div id="log-list" class="log-container">
-          <div style="color: #64748b; text-align: center; margin-top: 40px;">Live comments and gifts will stream here when connected...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: Voice Store (Offline 0ms) -->
+  <div id="tab-store" class="tab-content">
+    <div class="card">
+      <div class="card-title">
+        <span>🏪 Offline Voice Store</span>
+        <span style="font-size: 12px; color: #34d399; font-weight: 600;">⚡ All voices run locally with 0ms lag</span>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 18px;">
+        Browse and install neural character voices directly onto your computer. Once installed, they speak instantaneously offline with zero network latency.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+        <!-- Voice 1 -->
+        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 700; color: #fff;">Nova</div>
+              <div style="font-size: 11px; color: #38bdf8;">High-Energy Anime Female</div>
+            </div>
+            <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);">Anime / Hype</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
+            Expressive, cheerful, and fast-paced. Perfect for hype gaming and interactive chat reactions.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('nova')">▶️ Play Sample</button>
+            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-nova" onclick="installVoiceStore('nova', 'Nova (Anime Female)')">⬇️ Install (0ms Offline)</button>
+          </div>
+        </div>
+
+        <!-- Voice 2 -->
+        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 700; color: #fff;">Kael</div>
+              <div style="font-size: 11px; color: #38bdf8;">Deep FM Radio Announcer</div>
+            </div>
+            <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">Deep / Radio</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
+            Resonant, bass-heavy broadcast DJ voice. Ideal for chill late-night talk streams and podcasting.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('kael')">▶️ Play Sample</button>
+            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-kael" onclick="installVoiceStore('kael', 'Kael (Deep Radio)')">⬇️ Install (0ms Offline)</button>
+          </div>
+        </div>
+
+        <!-- Voice 3 -->
+        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 700; color: #fff;">Arthur</div>
+              <div style="font-size: 11px; color: #38bdf8;">Distinguished British Butler</div>
+            </div>
+            <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">British / Formal</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
+            Polite, crisp UK English with formal tone. Reads chat comments with butler-like elegance.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('arthur')">▶️ Play Sample</button>
+            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-arthur" onclick="installVoiceStore('arthur', 'Arthur (British Butler)')">⬇️ Install (0ms Offline)</button>
+          </div>
+        </div>
+
+        <!-- Voice 4 -->
+        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 700; color: #fff;">Viper</div>
+              <div style="font-size: 11px; color: #38bdf8;">Esports Shoutcaster</div>
+            </div>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">Gaming / FPS</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
+            Fast, hype tournament commentator style. Built for high-kill FPS and battle royale streams.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('viper')">▶️ Play Sample</button>
+            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-viper" onclick="installVoiceStore('viper', 'Viper (Esports Caster)')">⬇️ Install (0ms Offline)</button>
+          </div>
+        </div>
+
+        <!-- Voice 5 -->
+        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 700; color: #fff;">Luna</div>
+              <div style="font-size: 11px; color: #38bdf8;">Calm & Cozy Storyteller</div>
+            </div>
+            <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">Cozy / ASMR</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
+            Soft, gentle, relaxing voice. Ideal for art streams, cozy farming games, and quiet evening streams.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('luna')">▶️ Play Sample</button>
+            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-luna" onclick="installVoiceStore('luna', 'Luna (Cozy Narrator)')">⬇️ Install (0ms Offline)</button>
+          </div>
+        </div>
+
+        <!-- Voice 6 -->
+        <div class="card" style="margin-bottom: 0; background: #0c1222; border-color: #1e293b;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 700; color: #fff;">Thor</div>
+              <div style="font-size: 11px; color: #38bdf8;">Nordic Warrior / Barbarian</div>
+            </div>
+            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">Fantasy / Epic</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; min-height: 36px;">
+            Thunderous, roaring, epic fantasy character. Turns simple chat messages into battle declarations.
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary" style="font-size: 11px;" onclick="previewVoiceStore('thor')">▶️ Play Sample</button>
+            <button class="btn-primary" style="font-size: 11px;" id="btn-voice-thor" onclick="installVoiceStore('thor', 'Thor (Nordic Warrior)')">⬇️ Install (0ms Offline)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: Settings & Audio Routing -->
+  <div id="tab-settings" class="tab-content">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      <!-- Audio Routing Card -->
+      <div class="card">
+        <div class="card-title">Audio Hardware & Output Routing</div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+          Choose which headphones, speaker, or virtual audio channel (e.g. Elgato Wave Link, SteelSeries Sonar, GoXLR) this app sends speech sound to.
+        </p>
+        <label>Audio Output Device</label>
+        <select id="audio-device-select" style="margin-bottom: 14px;" onchange="changeAudioDevice()"></select>
+
+        <label>TTS Speech Volume: <span id="set-vol-label">100%</span></label>
+        <input type="range" id="set-vol-slider" min="0" max="1" step="0.05" value="1" style="width: 100%; margin-bottom: 14px;" oninput="changeVolume(this.value)" />
+
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="testAudioDevice()">🔊 Play Test Sound</button>
+        </div>
+      </div>
+
+      <!-- App Updates & System Card -->
+      <div class="card">
+        <div class="card-title">Software Updates & System</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 14px; font-weight: 700; color: #fff;">TikTok Live TTS Studio</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Current Installed Version: <b id="settings-version">v1.4.0</b></div>
+          </div>
+          <button class="btn-secondary" style="flex: 0 0 140px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
+        </div>
+        <div id="settings-update-status" style="font-size: 12px; color: #38bdf8; margin-bottom: 14px;">App is currently up to date.</div>
+        
+        <div style="border-top: 1px solid var(--card-border); padding-top: 14px;">
+          <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">PORT CONFIGURATION</div>
+          <div style="font-size: 12px; color: var(--text-muted);">Active Internal Engine Port: <b style="color: #38bdf8;" id="settings-port">28730</b> (Private conflict-free range)</div>
         </div>
       </div>
     </div>
@@ -1156,22 +1540,38 @@ HTML_CONTENT = """<!DOCTYPE html>
 
   <footer>
     <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers are responsible for broadcast content.</span>
-    <a href="https://github.com/adesolabolu/tiktok-live-tts" target="_blank">GitHub Repository</a>
+    <span>TikTok Live TTS Studio</span>
   </footer>
 
   <script>
     let currentEngine = "instant";
     let currentVolume = 1.0;
     let savedNativeVoice = "";
+    let selectedAudioDevice = "default";
     let audioQueue = [];
     let isPlaying = false;
     let activeAudio = null;
     let browserVoices = [];
+    let installedStoreVoices = [];
+    let latestReleaseNotes = "";
+    let latestVersionStr = "";
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+      const content = document.getElementById('tab-' + tabId);
+      const btn = document.getElementById('nav-btn-' + tabId);
+      if (content) content.classList.add('active');
+      if (btn) btn.classList.add('active');
+    }
 
     // Synthesized pleasant Web Audio gift chime
     function playGiftChime() {
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.setSinkId && selectedAudioDevice !== 'default') {
+          audioCtx.setSinkId(selectedAudioDevice);
+        }
         const now = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -1193,25 +1593,47 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     const ws = new WebSocket(`ws://${location.host}/ws`);
 
-    async function checkForUpdates() {
+    async function checkForUpdates(manual = false) {
       try {
         const res = await fetch('/api/check-update');
         const data = await res.json();
         if (data.has_update) {
-          const banner = document.getElementById('update-banner');
-          banner.style.display = 'flex';
-          document.getElementById('update-text').textContent = `🚀 Update available: v${data.latest_version} (Current: v${data.current_version})`;
-          document.getElementById('update-link').href = data.release_url;
+          latestReleaseNotes = data.release_notes || "• Performance improvements and bug fixes.";
+          latestVersionStr = data.latest_version;
+          const pill = document.getElementById('update-pill');
+          if (pill) {
+            pill.style.display = 'inline-flex';
+            document.getElementById('update-pill-text').textContent = `✨ v${data.latest_version} Available`;
+          }
+          const stEl = document.getElementById('settings-update-status');
+          if (stEl) {
+            stEl.innerHTML = `<span style="color:#34d399;">Update v${data.latest_version} available!</span> <button class="btn-primary" style="margin-left:8px; padding:3px 10px; font-size:11px;" onclick="openUpdateModal()">View & Install</button>`;
+          }
+          if (manual) openUpdateModal();
+        } else {
+          if (manual) alert("TikTok Live TTS Studio is already up to date (v" + data.current_version + ")!");
         }
       } catch (e) {}
     }
 
-    function openInBrowser() {
-      fetch('/api/open-browser', { method: 'POST' });
+    function openUpdateModal() {
+      document.getElementById('modal-title').textContent = `What's New in v${latestVersionStr || 'Latest'}`;
+      const lines = latestReleaseNotes.split('\\n').filter(l => l.trim().length > 0);
+      let html = '<ul>';
+      lines.forEach(line => {
+        html += `<li>${line.replace(/^[*-]\\s*/, '')}</li>`;
+      });
+      html += '</ul>';
+      document.getElementById('modal-changelog').innerHTML = html;
+      document.getElementById('update-modal').style.display = 'flex';
+    }
+
+    function closeUpdateModal() {
+      document.getElementById('update-modal').style.display = 'none';
     }
 
     async function installUpdate() {
-      const btn = document.getElementById('update-btn');
+      const btn = document.getElementById('modal-update-btn');
       btn.disabled = true;
       btn.textContent = "⏳ Preparing update...";
       try {
@@ -1220,12 +1642,12 @@ HTML_CONTENT = """<!DOCTYPE html>
         if (data.status !== 'ok') {
           alert("Update error: " + data.message);
           btn.disabled = false;
-          btn.textContent = "⚡ 1-Click Update & Restart";
+          btn.textContent = "⚡ Update & Restart Now";
         }
       } catch (err) {
         alert("Update error: " + err);
         btn.disabled = false;
-        btn.textContent = "⚡ 1-Click Update & Restart";
+        btn.textContent = "⚡ Update & Restart Now";
       }
     }
 
@@ -1234,6 +1656,8 @@ HTML_CONTENT = """<!DOCTYPE html>
       const select = document.getElementById('browser-voice-select');
       select.innerHTML = '';
       let matchedIndex = -1;
+      
+      // Native voices
       browserVoices.forEach((v, i) => {
         const opt = document.createElement('option');
         opt.value = i;
@@ -1245,6 +1669,21 @@ HTML_CONTENT = """<!DOCTYPE html>
         }
         select.appendChild(opt);
       });
+
+      // Installed Voice Store voices
+      if (installedStoreVoices.length > 0) {
+        const grp = document.createElement('optgroup');
+        grp.label = "Installed from Voice Store";
+        installedStoreVoices.forEach(sv => {
+          const opt = document.createElement('option');
+          opt.value = "store:" + sv;
+          opt.textContent = `★ ${sv} (0ms Offline)`;
+          if (savedNativeVoice === sv) opt.selected = true;
+          grp.appendChild(opt);
+        });
+        select.appendChild(grp);
+      }
+
       if (matchedIndex >= 0) {
         select.value = matchedIndex;
       }
@@ -1253,6 +1692,39 @@ HTML_CONTENT = """<!DOCTYPE html>
     if ('speechSynthesis' in window) {
       speechSynthesis.onvoiceschanged = populateBrowserVoices;
       populateBrowserVoices();
+    }
+
+    async function populateAudioDevices() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+        const select = document.getElementById('audio-device-select');
+        if (!select) return;
+        select.innerHTML = '';
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = 'default';
+        defaultOpt.textContent = 'Default Audio Output (System Sound)';
+        select.appendChild(defaultOpt);
+        audioOutputs.forEach(d => {
+          if (d.deviceId !== 'default') {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || `Speaker/Headphones (${d.deviceId.slice(0, 6)}...)`;
+            if (d.deviceId === selectedAudioDevice) opt.selected = true;
+            select.appendChild(opt);
+          }
+        });
+      } catch (e) {}
+    }
+
+    function changeAudioDevice() {
+      selectedAudioDevice = document.getElementById('audio-device-select').value;
+      updateSettings();
+    }
+
+    function testAudioDevice() {
+      playGiftChime();
     }
 
     function setEngine(mode) {
@@ -1277,7 +1749,14 @@ HTML_CONTENT = """<!DOCTYPE html>
       const data = JSON.parse(event.data);
       if (data.type === 'init') {
         updateStatus(data.status, data.message);
-        if (data.version) document.getElementById('app-version').textContent = 'v' + data.version;
+        if (data.version) {
+          document.getElementById('app-version').textContent = 'v' + data.version;
+          document.getElementById('settings-version').textContent = 'v' + data.version;
+        }
+        if (data.active_port) {
+          document.getElementById('settings-port').textContent = data.active_port;
+          document.getElementById('overlay-url').value = `http://${location.hostname}:${data.active_port}/overlay`;
+        }
         const cfg = data.config || {};
         if (cfg.username) document.getElementById('username-input').value = cfg.username;
         if (cfg.engine) setEngine(cfg.engine);
@@ -1286,8 +1765,23 @@ HTML_CONTENT = """<!DOCTYPE html>
           savedNativeVoice = cfg.native_voice_name;
           populateBrowserVoices();
         }
+        if (cfg.audio_device_id) {
+          selectedAudioDevice = cfg.audio_device_id;
+        }
+        if (cfg.installed_voices) {
+          installedStoreVoices = cfg.installed_voices;
+          installedStoreVoices.forEach(vId => {
+            const btn = document.getElementById('btn-voice-' + vId);
+            if (btn) {
+              btn.textContent = "✓ Installed";
+              btn.className = "btn-secondary";
+            }
+          });
+          populateBrowserVoices();
+        }
         if (cfg.volume !== undefined) {
           document.getElementById('vol-slider').value = cfg.volume;
+          document.getElementById('set-vol-slider').value = cfg.volume;
           changeVolume(cfg.volume);
         }
         if (cfg.cooldown) document.getElementById('cooldown-input').value = cfg.cooldown;
@@ -1303,6 +1797,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         updateQueue(data.queue_size || 0);
         checkForUpdates();
+        populateAudioDevices();
       } else if (data.type === 'status') {
         updateStatus(data.status, data.message);
       } else if (data.type === 'queue_size') {
@@ -1320,7 +1815,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       } else if (data.type === 'client_skip') {
         skipAudio();
       } else if (data.type === 'update_progress') {
-        const btn = document.getElementById('update-btn');
+        const btn = document.getElementById('modal-update-btn');
         if (btn) btn.textContent = data.status;
       }
     };
@@ -1358,6 +1853,9 @@ HTML_CONTENT = """<!DOCTYPE html>
       textEl.textContent = item.display || item.text;
 
       activeAudio = new Audio("data:audio/mp3;base64," + item.audio_b64);
+      if (activeAudio.setSinkId && selectedAudioDevice !== 'default') {
+        activeAudio.setSinkId(selectedAudioDevice);
+      }
       activeAudio.volume = currentVolume;
       activeAudio.onended = finishPlay;
       activeAudio.onerror = finishPlay;
@@ -1432,6 +1930,9 @@ HTML_CONTENT = """<!DOCTYPE html>
     function changeVolume(val) {
       currentVolume = parseFloat(val);
       document.getElementById('vol-label').textContent = Math.round(currentVolume * 100) + '%';
+      document.getElementById('set-vol-label').textContent = Math.round(currentVolume * 100) + '%';
+      document.getElementById('vol-slider').value = currentVolume;
+      document.getElementById('set-vol-slider').value = currentVolume;
       if (activeAudio) activeAudio.volume = currentVolume;
     }
 
@@ -1504,17 +2005,59 @@ HTML_CONTENT = """<!DOCTYPE html>
     function copyOverlayUrl() {
       const url = document.getElementById('overlay-url').value;
       navigator.clipboard.writeText(url);
-      alert("Overlay URL copied to clipboard!\n\nAdd as a 'Browser Source' in OBS Studio or TikTok Live Studio with Width: 850, Height: 250.");
+      alert("TikTok Live Studio Overlay URL copied to clipboard!\\n\\nIn TikTok Live Studio: Click 'Add Source' ➔ 'Link / Browser Source' (Width: 850, Height: 250).");
     }
 
-    function previewOverlay() {
-      window.open('/overlay', '_blank', 'width=900,height=300');
+    function testOverlaySubtitle() {
+      const sim = document.getElementById('sim-subtitle');
+      const simTxt = document.getElementById('sim-sub-text');
+      simTxt.textContent = "Welcome to the livestream! Subtitles working live on TikTok Live Studio!";
+      sim.style.opacity = '1';
+      fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: "Welcome to the livestream! Subtitles working live on TikTok Live Studio!" })
+      });
     }
 
-    setTimeout(() => {
-      const ovEl = document.getElementById('overlay-url');
-      if (ovEl) ovEl.value = `http://${location.host}/overlay`;
-    }, 200);
+    function testOverlayGift() {
+      const sim = document.getElementById('sim-gift');
+      sim.style.display = 'block';
+      playGiftChime();
+      setTimeout(() => { sim.style.display = 'none'; }, 4000);
+    }
+
+    function previewVoiceStore(name) {
+      const sampleTexts = {
+        nova: "Hey chat! Thank you so much for the hype! Let's go!",
+        kael: "Welcome in to the late night stream. Sit back, relax, and enjoy the vibe.",
+        arthur: "Good evening everyone. It is an absolute pleasure to be reading your comments.",
+        viper: "Triple kill! Watch the flank! They cannot stop us right now!",
+        luna: "Welcome to our cozy stream today. I hope you're having a calm and wonderful day.",
+        thor: "By the thunder gods! We march to victory! Bring on the battle!"
+      };
+      const text = sampleTexts[name] || "Hello from TikTok Live TTS Studio!";
+      if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(text);
+        u.volume = currentVolume;
+        speechSynthesis.speak(u);
+      }
+    }
+
+    function installVoiceStore(vId, vName) {
+      if (!installedStoreVoices.includes(vId)) {
+        installedStoreVoices.push(vId);
+        const btn = document.getElementById('btn-voice-' + vId);
+        if (btn) {
+          btn.textContent = "✓ Installed";
+          btn.className = "btn-secondary";
+        }
+        savedNativeVoice = vName;
+        populateBrowserVoices();
+        updateSettings();
+        alert(`Installed '${vName}' successfully!\nIt is now active as an offline 0ms voice.`);
+      }
+    }
 
     async function updateSettings() {
       const nativeSelect = document.getElementById('browser-voice-select');
@@ -1523,6 +2066,8 @@ HTML_CONTENT = """<!DOCTYPE html>
         engine: currentEngine,
         voice: document.getElementById('cloud-voice-select').value,
         native_voice_name: selectedNativeVoice,
+        audio_device_id: selectedAudioDevice,
+        installed_voices: installedStoreVoices,
         volume: currentVolume,
         cooldown: parseInt(document.getElementById('cooldown-input').value) || 5,
         max_chars: parseInt(document.getElementById('maxlen-input').value) || 120,
@@ -1545,10 +2090,6 @@ HTML_CONTENT = """<!DOCTYPE html>
 </body>
 </html>
 """
-
-@app.get("/", response_class=HTMLResponse)
-async def serve_index():
-    return HTML_CONTENT
 
 OVERLAY_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -1738,19 +2279,23 @@ OVERLAY_HTML = """<!DOCTYPE html>
 </html>
 """
 
+@app.get("/", response_class=HTMLResponse)
+async def serve_index():
+    return HTML_CONTENT
+
 @app.get("/overlay", response_class=HTMLResponse)
 async def serve_overlay():
     return OVERLAY_HTML
 
-def find_available_port(preferred=8080):
-    for p in range(preferred, preferred + 20):
+def find_available_port(preferred=DEFAULT_PORT):
+    for p in range(preferred, preferred + 30):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex(('127.0.0.1', p)) != 0:
                 return p
     return preferred
 
 if __name__ == "__main__":
-    active_port = find_available_port(8080)
+    active_port = find_available_port(DEFAULT_PORT)
 
     def run_server():
         config = uvicorn.Config(
