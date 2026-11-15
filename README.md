@@ -4,8 +4,13 @@ A high-performance, standalone Text-to-Speech (TTS) studio engineered specifical
 
 ---
 
-## ⚡ Key Highlights (v1.9.0)
+## ⚡ Key Highlights (v1.9.1)
 
+* **🛡️ Enhanced Audience & Fan Club Permissions (v1.9.1 Fix):**
+  * Fully adapted to TikTokLive v3 protobuf structures (`UserIdentity` and `BadgeStruct`).
+  * **Followers Only:** Correctly recognizes room followers, moderators, anchors, and mutual followers via anchor identity flags and follow status.
+  * **Subscribers Only:** Seamlessly detects active subscribers and super fans.
+  * **Fan Club Members & Level Thresholds:** Reliably extracts active room Fan Club badges (`LV. 1` through `LV. 30+`) from real-time webcast badge data.
 * **🚀 1-Click Windows Setup (`TikTokLiveTTS-Setup.exe`):** Single-file Inno Setup installer. Installs cleanly to your PC, creates Desktop & Start Menu shortcuts, and features seamless in-app auto-updating.
 * **🎨 Broadcast Studio UI Redesign:** Sleek obsidian dark-mode interface built to professional hardware studio standards. Features Emil Kowalski motion curves, tactile `:active` button compressions (`scale(0.97)`), real-time animated audio VU meter equalizers, hardware-styled toggle switches, and categorized activity feeds.
 * **⚡ Instant Zero-Lag Speech (<30ms):** 100% offline neural voice engine running locally on your computer with zero cloud latency or buffering.

@@ -48,7 +48,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.9.0"
+CURRENT_VERSION = "1.9.1"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -492,50 +492,138 @@ async def broadcast(data: dict):
             dead.add(ws)
     state.websockets.difference_update(dead)
 
-def check_filters(user, text: str) -> tuple[bool, str]:
+def extract_user_status(target) -> tuple[int, bool, bool]:
+    """
+    Extracts (fan_level, is_follower, is_sub) across TikTokLive v3 event structures,
+    protobuf badge lists, user_identity, and legacy user fields.
+    """
+    if hasattr(target, 'user'):
+        user = target.user
+        identity = getattr(target, 'user_identity', None)
+        event = target
+    else:
+        user = target
+        identity = getattr(target, 'user_identity', None)
+        event = None
+
+    # --- 1. Fan Level Extraction ---
+    fan_level = 0
+    badges = getattr(user, 'badge_list', None) or getattr(user, 'badges', None) or []
+    for b in badges:
+        st = str(getattr(b, 'scene_type', '') or getattr(b, 'badge_scene', '')).upper()
+        if 'FANS' in st:
+            ple = getattr(b, 'privilege_log_extra', None) or getattr(b, 'log_extra', None)
+            if ple and hasattr(ple, 'level'):
+                try:
+                    lvl = int(ple.level)
+                    if lvl > fan_level:
+                        fan_level = lvl
+                except (ValueError, TypeError):
+                    pass
+
+    if fan_level == 0 and hasattr(user, 'member_level') and user.member_level:
+        try:
+            lvl = int(user.member_level)
+            if lvl > fan_level:
+                fan_level = lvl
+        except (ValueError, TypeError):
+            pass
+
+    if hasattr(user, 'fans_club') and user.fans_club:
+        fc_data = getattr(user.fans_club, 'data', None)
+        if fc_data and hasattr(fc_data, 'level'):
+            try:
+                lvl = int(fc_data.level)
+                if lvl > fan_level:
+                    fan_level = lvl
+            except (ValueError, TypeError):
+                pass
+        prefer_data = getattr(user.fans_club, 'prefer_data', None)
+        if isinstance(prefer_data, dict):
+            for fd in prefer_data.values():
+                lvl = getattr(fd, 'level', 0)
+                if lvl > fan_level:
+                    fan_level = lvl
+
+    if hasattr(user, 'fans_club_info') and user.fans_club_info:
+        lvl = getattr(user.fans_club_info, 'fans_level', 0)
+        if lvl > fan_level:
+            fan_level = lvl
+
+    # --- 2. Subscriber Check ---
+    is_sub = False
+    if identity and getattr(identity, 'is_subscriber_of_anchor', False):
+        is_sub = True
+    elif event and getattr(event, 'user_is_super_fan', False):
+        is_sub = True
+    elif hasattr(user, 'subscribe_info') and user.subscribe_info:
+        if getattr(user.subscribe_info, 'is_subscribe', False) or getattr(user.subscribe_info, 'is_subscribed_to_anchor', False):
+            is_sub = True
+    elif getattr(user, 'is_subscribe', False):
+        is_sub = True
+    else:
+        for b in badges:
+            st = str(getattr(b, 'scene_type', '') or getattr(b, 'badge_scene', '')).upper()
+            if 'SUB' in st:
+                is_sub = True
+                break
+
+    # --- 3. Follower Check ---
+    is_follower = False
+    if identity and (getattr(identity, 'is_follower_of_anchor', False) or getattr(identity, 'is_mutual_following_with_anchor', False) or getattr(identity, 'is_anchor', False) or getattr(identity, 'is_moderator_of_anchor', False)):
+        is_follower = True
+    elif hasattr(user, 'follow_info') and user.follow_info:
+        if getattr(user.follow_info, 'follow_status', 0) >= 1:
+            is_follower = True
+    elif getattr(user, 'follow_status', 0) >= 1:
+        is_follower = True
+    elif getattr(user, 'is_follower', False) or getattr(user, 'is_friend', False):
+        is_follower = True
+    elif is_sub or fan_level > 0:
+        is_follower = True
+
+    return fan_level, is_follower, is_sub
+
+def check_filters(target, text: str) -> tuple[bool, str, int]:
     now = time.time()
+    user = getattr(target, 'user', target)
     user_id = getattr(user, 'unique_id', str(getattr(user, 'id', 'user')))
     clean_text = text.strip()
 
     # 0. Command Prefix Trigger Check (Options: '.', '/', '!')
     if state.command_prefix and state.command_prefix in [".", "/", "!"]:
         if not clean_text.startswith(state.command_prefix):
-            return False, f"Requires prefix '{state.command_prefix}'"
+            return False, f"Requires prefix '{state.command_prefix}'", 0
         clean_text = clean_text[len(state.command_prefix):].strip()
         if not clean_text:
-            return False, "Empty message after prefix"
+            return False, "Empty message after prefix", 0
     
     # 1. Spam Auto-Mute Check (3+ messages in 10s = 30s mute)
     if state.spam_auto_mute:
         mute_until = state.user_muted_until.get(user_id, 0)
         if now < mute_until:
             rem = int(mute_until - now)
-            return False, f"Auto-muted for spam ({rem}s left)"
+            return False, f"Auto-muted for spam ({rem}s left)", 0
             
         history = state.user_msg_history.setdefault(user_id, [])
         history = [t for t in history if (now - t) < 10.0]
         if len(history) >= 3:
             state.user_muted_until[user_id] = now + 30.0
-            return False, "Auto-muted 30s (rapid spam)"
+            return False, "Auto-muted 30s (rapid spam)", 0
         history.append(now)
         state.user_msg_history[user_id] = history
 
     # 2. Fan Club & Role Filter Check
-    fan_level = 0
-    if hasattr(user, 'fans_club') and user.fans_club and hasattr(user.fans_club, 'data') and user.fans_club.data:
-        fan_level = getattr(user.fans_club.data, 'level', 0)
-        
-    is_sub = getattr(user, 'is_subscribe', False)
-    is_follower = getattr(user, 'is_follower', False)
+    fan_level, is_follower, is_sub = extract_user_status(target)
 
     if state.role_filter == "followers" and not is_follower:
-        return False, "Followers only"
+        return False, "Followers only", fan_level
     if state.role_filter == "subs" and not is_sub:
-        return False, "Subscribers only"
+        return False, "Subscribers only", fan_level
     if state.role_filter == "fan_club" and fan_level < 1:
-        return False, "Fan Club only"
+        return False, "Fan Club only", fan_level
     if state.min_fan_level > 0 and fan_level < state.min_fan_level:
-        return False, f"Requires Fan Lv.{state.min_fan_level} (Viewer is Lv.{fan_level})"
+        return False, f"Requires Fan Lv.{state.min_fan_level} (Viewer is Lv.{fan_level})", fan_level
 
     # 3. Max length truncate
     if len(clean_text) > state.max_chars:
@@ -545,16 +633,16 @@ def check_filters(user, text: str) -> tuple[bool, str]:
     lower_text = clean_text.lower()
     for word in state.banned_words:
         if word and word.lower() in lower_text:
-            return False, f"Blacklisted word: {word}"
+            return False, f"Blacklisted word: {word}", fan_level
             
     # 5. Cooldown check
     last = state.user_last_seen.get(user_id, 0)
     if (now - last) < state.cooldown:
         remaining = int(state.cooldown - (now - last))
-        return False, f"Cooldown ({remaining}s)"
+        return False, f"Cooldown ({remaining}s)", fan_level
         
     state.user_last_seen[user_id] = now
-    return True, clean_text
+    return True, clean_text, fan_level
 
 def get_voice_id_from_name(voice_name: str) -> Optional[str]:
     if not voice_name:
@@ -626,10 +714,7 @@ async def tiktok_runner(username: str):
 
         @client.on(CommentEvent)
         async def on_comment(event: CommentEvent):
-            allowed, result = check_filters(event.user, event.comment)
-            fan_level = 0
-            if hasattr(event.user, 'fans_club') and event.user.fans_club and hasattr(event.user.fans_club, 'data') and event.user.fans_club.data:
-                fan_level = getattr(event.user.fans_club.data, 'level', 0)
+            allowed, result, fan_level = check_filters(event, event.comment)
                 
             log_item = {
                 "type": "comment",
@@ -1896,7 +1981,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       <div>
         <div class="brand-title">
           <span>TikTok Live TTS Studio</span>
-          <span class="version-pill" id="app-version">v1.9.0</span>
+          <span class="version-pill" id="app-version">v1.9.1</span>
         </div>
       </div>
     </div>
@@ -1904,7 +1989,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="telemetry-strip">
       <button id="update-pill" class="update-pill" onclick="openUpdateModal()">
         <span class="update-pulse"></span>
-        <span id="update-pill-text">v1.9.0 Ready</span>
+        <span id="update-pill-text">v1.9.1 Ready</span>
       </button>
       <div id="latency-badge" class="telemetry-badge latency">
         <span>⚡ 0ms Offline CPU Engine</span>
@@ -2263,7 +2348,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
           <div>
             <div style="font-size: 14px; font-weight: 700; color: #fff;">TikTok Live TTS Studio</div>
-            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.0</b></div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.1</b></div>
           </div>
           <button class="btn-secondary" style="flex: 0 0 150px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
         </div>
@@ -2297,7 +2382,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
   <footer>
     <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers maintain full moderation responsibility.</span>
-    <span>TikTok Live TTS Studio v1.9.0 • 0ms Local Neural Voice Engine</span>
+    <span>TikTok Live TTS Studio v1.9.1 • 0ms Local Neural Voice Engine</span>
   </footer>
 
   <script>
