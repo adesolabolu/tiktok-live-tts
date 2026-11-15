@@ -47,7 +47,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SuperFanJoinEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.4.0"
+CURRENT_VERSION = "1.5.0"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -547,52 +547,61 @@ async def api_install_update():
 
             target_dir = BASE_DIR
             target_exe = os.path.join(target_dir, "TikTokLiveTTS.exe")
-
-            # Create bulletproof batch updater with PID check and no error spam
             current_pid = os.getpid()
-            bat_path = os.path.join(temp_dir, "apply_update.bat")
-            with open(bat_path, "w", encoding="utf-8") as bf:
-                bf.write(f"""@echo off
-setlocal
-set "TARGET_DIR={target_dir}"
-set "SOURCE_DIR={source_folder}"
-set "TARGET_EXE={target_exe}"
-set "OLD_PID={current_pid}"
 
-:: Terminate old process tree cleanly
-taskkill /F /T /PID %OLD_PID% >nul 2>&1
-timeout /t 2 /nobreak >nul
-
-:wait_loop
-tasklist /fi "PID eq %OLD_PID%" 2>nul | find "%OLD_PID%" >nul
-if not errorlevel 1 (
-    timeout /t 1 /nobreak >nul
-    goto wait_loop
-)
-
-:: Wait for file handles to unlock
-timeout /t 2 /nobreak >nul
-
-:: Robocopy with max 2 retries, 1s wait, and quiet logs
-robocopy "%SOURCE_DIR%" "%TARGET_DIR%" /E /IS /IT /R:2 /W:1 /nfl /ndl /njh /njs >nul
-
-:: Launch updated app cleanly
-start "" "%TARGET_EXE%"
-exit
-""")
-
-            await broadcast({"type": "update_progress", "status": "Restarting application now...", "percent": 100})
+            # Priority 1: Modern Antigravity/Discord style GUI updater box (updater.exe)
+            updater_exe = os.path.join(source_folder, "updater.exe")
+            if not os.path.exists(updater_exe):
+                updater_exe = os.path.join(target_dir, "updater.exe")
 
             DETACHED_PROCESS = 0x00000008
             CREATE_NEW_PROCESS_GROUP = 0x00000200
-            subprocess.Popen(["cmd.exe", "/c", bat_path], creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, close_fds=True)
+            CREATE_NO_WINDOW = 0x08000000
+
+            if os.path.exists(updater_exe):
+                await broadcast({"type": "update_progress", "status": "Launching updater dialog...", "percent": 100})
+                cmd = [
+                    updater_exe,
+                    "--pid", str(current_pid),
+                    "--source", source_folder,
+                    "--target", target_dir,
+                    "--exe", target_exe,
+                    "--version", f"v{latest_tag}"
+                ]
+                subprocess.Popen(
+                    cmd,
+                    creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                    close_fds=True
+                )
+            else:
+                # Priority 2: 100% Silent VBScript launcher (never opens any black terminal / cmd window)
+                vbs_path = os.path.join(temp_dir, "silent_updater.vbs")
+                bat_path = os.path.join(temp_dir, "apply_update.bat")
+                with open(bat_path, "w", encoding="utf-8") as bf:
+                    bf.write(f"""@echo off
+set "OLD_PID={current_pid}"
+taskkill /F /T /PID %OLD_PID% >nul 2>&1
+timeout /t 2 /nobreak >nul
+robocopy "{source_folder}" "{target_dir}" /E /IS /IT /R:2 /W:1 /nfl /ndl /njh /njs >nul
+start "" "{target_exe}"
+exit
+""")
+                with open(vbs_path, "w", encoding="utf-8") as vf:
+                    # Parameter 0 hides console window completely (vbHide)
+                    vf.write(f'CreateObject("Wscript.Shell").Run chr(34) & "{bat_path}" & chr(34), 0, False\n')
+
+                subprocess.Popen(
+                    ["wscript.exe", "//B", "//Nologo", vbs_path],
+                    creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+                    close_fds=True
+                )
 
             def do_exit():
-                time.sleep(1.0)
+                time.sleep(0.8)
                 os._exit(0)
 
             threading.Thread(target=do_exit, daemon=True).start()
-            return {"status": "ok", "message": "Update downloaded, restarting..."}
+            return {"status": "ok", "message": "Update downloaded, launching installer..."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

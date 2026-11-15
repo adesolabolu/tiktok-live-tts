@@ -58,6 +58,13 @@ jobs:
             --add-data "icon.png;." `
             --add-data "app.py;." app.py
 
+      - name: Compile Standalone GUI Updater with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "updater" `
+            --icon "icon.ico" `
+            updater.py
+          Copy-Item -Path "dist/updater.exe" -Destination "dist/TikTokLiveTTS/updater.exe"
+
       - name: Compress Executable into ZIP
         run: |
           powershell Compress-Archive -Path dist/TikTokLiveTTS -DestinationPath dist/TikTokLiveTTS-Windows.zip
