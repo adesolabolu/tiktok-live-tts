@@ -48,7 +48,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.9.2"
+CURRENT_VERSION = "1.9.3"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -1998,7 +1998,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       <div>
         <div class="brand-title">
           <span>TikTok Live TTS Studio</span>
-          <span class="version-pill" id="app-version">v1.9.2</span>
+          <span class="version-pill" id="app-version">v1.9.3</span>
         </div>
       </div>
     </div>
@@ -2006,7 +2006,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="telemetry-strip">
       <button id="update-pill" class="update-pill" onclick="openUpdateModal()">
         <span class="update-pulse"></span>
-        <span id="update-pill-text">v1.9.2 Ready</span>
+        <span id="update-pill-text">v1.9.3 Ready</span>
       </button>
       <div id="latency-badge" class="telemetry-badge latency">
         <span>⚡ 0ms Offline CPU Engine</span>
@@ -2371,7 +2371,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
           <div>
             <div style="font-size: 14px; font-weight: 700; color: #fff;">TikTok Live TTS Studio</div>
-            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.2</b></div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.3</b></div>
           </div>
           <button class="btn-secondary" style="flex: 0 0 150px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
         </div>
@@ -2405,7 +2405,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
   <footer>
     <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers maintain full moderation responsibility.</span>
-    <span>TikTok Live TTS Studio v1.9.2 • 0ms Local Neural Voice Engine</span>
+    <span>TikTok Live TTS Studio v1.9.3 • 0ms Local Neural Voice Engine</span>
   </footer>
 
   <script>
