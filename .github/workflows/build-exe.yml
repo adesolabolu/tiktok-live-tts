@@ -92,7 +92,8 @@ jobs:
             -ProjectSlug "tiktok-live-tts" `
             -SigningPolicySlug "release-signing" `
             -OutputArtifactPath "dist/TikTokLiveTTS-Setup.exe" `
-            -WaitForCompletion
+            -WaitForCompletion `
+            -Force
 
       - name: Compress Executable into ZIP
         run: |
