@@ -1,6 +1,6 @@
 ; Inno Setup Script for TikTok Live TTS Studio
 #define MyAppName "TikTok Live TTS Studio"
-#define MyAppVersion "1.9.4"
+#define MyAppVersion "1.9.5"
 #define MyAppPublisher "Adesola Boluwatife"
 #define MyAppURL "https://github.com/adesolabolu/tiktok-live-tts"
 #define MyAppExeName "TikTokLiveTTS.exe"
