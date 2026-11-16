@@ -1227,10 +1227,10 @@ HTML_CONTENT = """<!DOCTYPE html>
   <title>TikTok Live TTS Studio</title>
   <style>
     :root {
-      --bg-canvas: #080c14;
-      --bg-surface: #0f172a;
-      --bg-surface-elevated: #131d36;
-      --bg-surface-hover: #192543;
+      --bg-canvas: #000000;
+      --bg-surface: #09090b;
+      --bg-surface-elevated: #121215;
+      --bg-surface-hover: #18181b;
       --border-subtle: rgba(255, 255, 255, 0.08);
       --border-elevated: rgba(255, 255, 255, 0.14);
       --border-focus: #06b6d4;
@@ -1244,9 +1244,9 @@ HTML_CONTENT = """<!DOCTYPE html>
       --accent-violet-glow: rgba(139, 92, 246, 0.25);
       --accent-rose: #f43f5e;
       --accent-rose-glow: rgba(244, 63, 94, 0.25);
-      --text-primary: #f8fafc;
-      --text-secondary: #94a3b8;
-      --text-tertiary: #64748b;
+      --text-primary: #ffffff;
+      --text-secondary: #a1a1aa;
+      --text-tertiary: #71717a;
       --radius-sm: 6px;
       --radius-md: 10px;
       --radius-lg: 14px;
@@ -1269,7 +1269,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     /* Studio Header */
     header {
-      background: #090e1a;
+      background: #000000;
       border-bottom: 1px solid var(--border-subtle);
       padding: 12px 28px;
       display: flex;
@@ -1289,11 +1289,12 @@ HTML_CONTENT = """<!DOCTYPE html>
       width: 34px;
       height: 34px;
       border-radius: 9px;
-      background: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+      background: #18181b;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 16px rgba(6, 182, 212, 0.35);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.25);
       flex-shrink: 0;
       font-size: 18px;
     }
@@ -1311,9 +1312,9 @@ HTML_CONTENT = """<!DOCTYPE html>
       font-weight: 700;
       padding: 2px 8px;
       border-radius: var(--radius-full);
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--accent-cyan);
-      border: 1px solid rgba(6, 182, 212, 0.25);
+      background: #18181b;
+      color: #d4d4d8;
+      border: 1px solid rgba(255, 255, 255, 0.12);
     }
     .telemetry-strip {
       display: flex;
@@ -1328,7 +1329,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       border-radius: var(--radius-full);
       font-size: 12px;
       font-weight: 600;
-      background: var(--bg-surface-elevated);
+      background: #09090b;
       border: 1px solid var(--border-subtle);
       color: var(--text-secondary);
     }
@@ -1376,11 +1377,11 @@ HTML_CONTENT = """<!DOCTYPE html>
       border-radius: var(--radius-full);
       font-size: 12px;
       font-weight: 700;
-      background: linear-gradient(90deg, #1e40af, #0284c7);
-      color: #fff;
-      border: 1px solid #38bdf8;
+      background: #18181b;
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.4);
       cursor: pointer;
-      box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
       animation: pulseGlow 2.5s infinite;
       transition: transform 120ms var(--ease-press);
     }
@@ -1388,21 +1389,21 @@ HTML_CONTENT = """<!DOCTYPE html>
     .update-pill:active { transform: scale(0.97); }
     .update-pulse { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; }
     @keyframes pulseGlow {
-      0%, 100% { box-shadow: 0 0 8px rgba(56, 189, 248, 0.4); }
-      50% { box-shadow: 0 0 16px rgba(56, 189, 248, 0.8); }
+      0%, 100% { box-shadow: 0 0 8px rgba(56, 189, 248, 0.25); }
+      50% { box-shadow: 0 0 16px rgba(56, 189, 248, 0.6); }
     }
 
     /* Segmented Navigation Bar */
     .nav-bar {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       padding: 0 28px;
-      background: #090e1a;
+      background: #000000;
       border-bottom: 1px solid var(--border-subtle);
       overflow-x: auto;
     }
     .nav-tab {
-      padding: 13px 20px;
+      padding: 13px 18px;
       background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
@@ -1421,7 +1422,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       background: rgba(255, 255, 255, 0.03);
     }
     .nav-tab.active {
-      color: var(--accent-cyan);
+      color: #ffffff;
       border-bottom-color: var(--accent-cyan);
       background: rgba(6, 182, 212, 0.06);
     }
@@ -1457,6 +1458,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       border-radius: var(--radius-lg);
       padding: 20px;
       margin-bottom: 18px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
       transition: border-color 150ms ease;
     }
     .card:hover {
@@ -1466,7 +1468,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.5px;
-      color: #cbd5e1;
+      color: #ffffff;
       margin-bottom: 14px;
       display: flex;
       align-items: center;
@@ -1496,8 +1498,8 @@ HTML_CONTENT = """<!DOCTYPE html>
     /* Inputs & Form Elements */
     input[type="text"], input[type="number"], select {
       width: 100%;
-      background: #070b13;
-      border: 1px solid #1e293b;
+      background: #000000;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: var(--radius-md);
       padding: 10px 14px;
       color: #fff;
@@ -1512,8 +1514,8 @@ HTML_CONTENT = """<!DOCTYPE html>
     .input-prefix-box {
       display: flex;
       align-items: center;
-      background: #070b13;
-      border: 1px solid #1e293b;
+      background: #000000;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: var(--radius-md);
       overflow: hidden;
       transition: border-color 150ms ease, box-shadow 150ms ease;
@@ -1524,16 +1526,50 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
     .input-prefix-label {
       padding: 10px 14px;
-      background: rgba(255, 255, 255, 0.04);
+      background: #09090b;
       color: var(--accent-cyan);
       font-weight: 700;
       font-size: 14px;
-      border-right: 1px solid #1e293b;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
     }
     .input-prefix-box input {
       border: none !important;
       box-shadow: none !important;
       background: transparent !important;
+    }
+
+    /* Role Segmented Buttons */
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .role-btn {
+      padding: 8px 10px;
+      border-radius: var(--radius-md);
+      background: #18181b;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 120ms ease;
+    }
+    .role-btn:hover {
+      background: #27272a;
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .role-btn.active {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--accent-cyan);
+      color: #38bdf8;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.2);
     }
 
     /* Buttons */
@@ -1560,30 +1596,30 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
     .btn-primary {
       background: var(--accent-emerald);
-      color: #061e14;
+      color: #000000;
       font-weight: 700;
-      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
     }
     .btn-primary:hover {
       background: #059669;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
     }
     .btn-secondary {
-      background: #1e293b;
+      background: #18181b;
       color: var(--text-primary);
       border: 1px solid var(--border-subtle);
     }
     .btn-secondary:hover {
-      background: #27354f;
-      border-color: rgba(255, 255, 255, 0.15);
+      background: #27272a;
+      border-color: rgba(255, 255, 255, 0.18);
     }
     .btn-danger {
-      background: rgba(244, 63, 94, 0.18);
+      background: rgba(244, 63, 94, 0.14);
       color: #fb7185;
-      border: 1px solid rgba(244, 63, 94, 0.35);
+      border: 1px solid rgba(244, 63, 94, 0.25);
     }
     .btn-danger:hover {
-      background: rgba(244, 63, 94, 0.28);
+      background: rgba(244, 63, 94, 0.24);
       color: #fff;
     }
 
@@ -1617,8 +1653,8 @@ HTML_CONTENT = """<!DOCTYPE html>
       position: absolute;
       cursor: pointer;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #1e293b;
-      border: 1px solid #334155;
+      background-color: #18181b;
+      border: 1px solid rgba(255, 255, 255, 0.15);
       transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       border-radius: 999px;
     }
@@ -1629,7 +1665,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       width: 16px;
       left: 3px;
       bottom: 3px;
-      background-color: #94a3b8;
+      background-color: #a1a1aa;
       transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       border-radius: 50%;
     }
@@ -1650,9 +1686,9 @@ HTML_CONTENT = """<!DOCTYPE html>
       margin: 10px 0 14px 0;
     }
     .chip {
-      background: var(--bg-surface-elevated);
+      background: #18181b;
       border: 1px solid var(--border-subtle);
-      color: #e2e8f0;
+      color: #d4d4d8;
       font-size: 12px;
       font-weight: 500;
       padding: 6px 12px;
@@ -1662,18 +1698,18 @@ HTML_CONTENT = """<!DOCTYPE html>
       white-space: nowrap;
     }
     .chip:hover {
-      background: rgba(6, 182, 212, 0.15);
+      background: rgba(6, 182, 212, 0.12);
       color: #38bdf8;
-      border-color: rgba(6, 182, 212, 0.4);
+      border-color: rgba(6, 182, 212, 0.3);
     }
     .chip:active {
       transform: scale(0.96);
     }
     .chip.active {
-      background: var(--accent-cyan);
-      color: #042f2e;
+      background: #ffffff;
+      color: #000000;
       font-weight: 700;
-      border-color: var(--accent-cyan);
+      border-color: #ffffff;
     }
 
     /* Dynamic Equalizer Wave Bars */
@@ -1720,20 +1756,20 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     /* Studio VU Deck / Now Speaking */
     .now-speaking-card {
-      background: linear-gradient(135deg, #0e172a 0%, #152238 100%);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      background: #09090b;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      box-shadow: 0 0 30px rgba(6, 182, 212, 0.05);
     }
     .speaking-display {
       min-height: 88px;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      background: rgba(0, 0, 0, 0.45);
+      background: #000000;
       border-radius: var(--radius-md);
       padding: 14px 18px;
       margin-bottom: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
     .speaking-user {
       font-size: 13px;
@@ -1759,8 +1795,8 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     /* Live Stream Feed */
     .log-container {
-      background: #070b13;
-      border: 1px solid #1e293b;
+      background: #000000;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: var(--radius-md);
       height: 540px;
       overflow-y: auto;
@@ -1773,20 +1809,23 @@ HTML_CONTENT = """<!DOCTYPE html>
       width: 6px;
     }
     .log-container::-webkit-scrollbar-thumb {
-      background: #1e293b;
+      background: #27272a;
       border-radius: 3px;
     }
     .log-item {
       padding: 8px 12px;
       border-radius: var(--radius-sm);
-      background: #0f172a;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: #09090b;
+      border: 1px solid rgba(255, 255, 255, 0.06);
       font-size: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
       animation: logSlide 180ms var(--ease-out);
+    }
+    .log-item:hover {
+      border-color: rgba(255, 255, 255, 0.12);
     }
     @keyframes logSlide {
       from { opacity: 0; transform: translateY(-4px); }
@@ -1849,7 +1888,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       min-width: 200px;
     }
     .voice-card {
-      background: #0b1120;
+      background: #09090b;
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
       padding: 18px;
@@ -1861,12 +1900,12 @@ HTML_CONTENT = """<!DOCTYPE html>
     }
     .voice-card:hover {
       transform: translateY(-2px);
-      border-color: rgba(255, 255, 255, 0.15);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8);
     }
     .voice-card.starred {
-      border-color: rgba(245, 158, 11, 0.5);
-      background: linear-gradient(180deg, #101728 0%, #0c1220 100%);
+      border-color: rgba(245, 158, 11, 0.4);
+      background: #0c0c0e;
     }
     .voice-badge-tag {
       font-size: 11px;
@@ -1907,21 +1946,21 @@ HTML_CONTENT = """<!DOCTYPE html>
       display: none;
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
       z-index: 100;
       align-items: center;
       justify-content: center;
       padding: 20px;
     }
     .modal-box {
-      background: #0f172a;
+      background: #09090b;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 16px;
       max-width: 500px;
       width: 100%;
       padding: 24px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
       animation: modalScale 200ms var(--ease-out);
     }
     @keyframes modalScale {
@@ -1933,10 +1972,10 @@ HTML_CONTENT = """<!DOCTYPE html>
     footer {
       margin-top: auto;
       border-top: 1px solid var(--border-subtle);
-      background: #080c14;
+      background: #000000;
       padding: 12px 28px;
       font-size: 11px;
-      color: var(--text-tertiary);
+      color: #52525b;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -2062,7 +2101,13 @@ HTML_CONTENT = """<!DOCTYPE html>
           </p>
 
           <label>Who Can Trigger Text-to-Speech?</label>
-          <select id="role-filter" onchange="updateSettings()" style="margin-bottom: 14px;">
+          <div class="role-grid">
+            <button type="button" class="role-btn active" id="rb-anyone" onclick="setRole('anyone')">👥 Everyone</button>
+            <button type="button" class="role-btn" id="rb-followers" onclick="setRole('followers')">⭐ Followers</button>
+            <button type="button" class="role-btn" id="rb-fan_club" onclick="setRole('fan_club')">👑 Fan Club</button>
+            <button type="button" class="role-btn" id="rb-subs" onclick="setRole('subs')">💎 Subs</button>
+          </div>
+          <select id="role-filter" onchange="syncRoleFromSelect()" style="display: none;">
             <option value="anyone">Everyone (Open to all chat)</option>
             <option value="followers">Followers Only</option>
             <option value="fan_club">Fan Club Members Only (Closes TTS for non-members)</option>
@@ -2202,7 +2247,7 @@ HTML_CONTENT = """<!DOCTYPE html>
   <!-- TAB 2: TikTok Studio Overlay -->
   <div id="tab-overlay" class="tab-content">
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 22px;">
-      <div class="card" style="border: 1px solid #0284c7; background: linear-gradient(135deg, #0b1329 0%, #075985 100%);">
+      <div class="card" style="border: 1px solid rgba(56, 189, 248, 0.25); background: #09090b;">
         <div class="card-title" style="color: #38bdf8;">
           <span>📺 TikTok Live Studio Setup</span>
         </div>
@@ -2237,14 +2282,14 @@ HTML_CONTENT = """<!DOCTYPE html>
         <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
           Preview how real-time floating subtitles and gift celebrations render over your game or camera:
         </p>
-        <div style="background: #020617; border: 1px dashed #334155; border-radius: 12px; height: 280px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 20px; position: relative; overflow: hidden;">
+        <div style="background: #000000; border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 12px; height: 280px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 20px; position: relative; overflow: hidden;">
           <div style="position: absolute; top: 12px; left: 14px; font-size: 11px; color: #475569; font-weight: 700;">[STREAM VIDEO / GAMEPLAY PREVIEW]</div>
           
           <div id="sim-gift" style="display: none; position: absolute; top: 20px; background: linear-gradient(135deg, #f59e0b, #d97706); border: 2px solid #fde68a; border-radius: 12px; padding: 10px 20px; color: #000; font-weight: 800; font-size: 14px; box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);">
             🎁 GamerFan99 Sent 10x Roses!
           </div>
 
-          <div id="sim-subtitle" style="display: flex; align-items: center; gap: 14px; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px; padding: 14px 20px; width: 92%; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+          <div id="sim-subtitle" style="display: flex; align-items: center; gap: 14px; background: rgba(9, 9, 11, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 14px; padding: 14px 20px; width: 92%; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
             <div class="equalizer-wave eq-active" style="height: 18px;">
               <div class="eq-bar"></div>
               <div class="eq-bar"></div>
@@ -2514,6 +2559,24 @@ HTML_CONTENT = """<!DOCTYPE html>
     let currentStoreCategory = "all";
     let storeSearchQuery = "";
     let currentLogFilter = 'all';
+
+    function setRole(role) {
+      const sel = document.getElementById('role-filter');
+      if (sel) {
+        sel.value = role;
+        updateRoleButtons(role);
+        updateSettings();
+      }
+    }
+    function updateRoleButtons(role) {
+      document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('rb-' + role);
+      if (activeBtn) activeBtn.classList.add('active');
+    }
+    function syncRoleFromSelect() {
+      const sel = document.getElementById('role-filter');
+      if (sel) updateRoleButtons(sel.value);
+    }
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -3153,19 +3216,6 @@ HTML_CONTENT = """<!DOCTYPE html>
         setTimeout(() => {
           if (icon) icon.textContent = "▶️";
           if (txt) txt.textContent = "Play Sample of Selected Voice";
-              display: testPhrase,
-              audio_b64: data.audio_b64
-            });
-          } else {
-            speakSystemVoice(testPhrase, data.voice);
-          }
-        }
-      } catch (err) {
-        console.error("testActiveVoiceSample error:", err);
-      } finally {
-        setTimeout(() => {
-          if (icon) icon.textContent = "▶️";
-          if (txt) txt.textContent = "Play Sample of Selected Voice";
           if (wave) { wave.style.display = "none"; wave.classList.remove("eq-active"); }
         }, 1800);
       }
@@ -3247,7 +3297,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         if (cfg.cooldown) document.getElementById('cooldown-input').value = cfg.cooldown;
         if (cfg.max_chars) document.getElementById('maxlen-input').value = cfg.max_chars;
         if (cfg.banned_words) document.getElementById('banned-input').value = cfg.banned_words;
-        if (cfg.role_filter) document.getElementById('role-filter').value = cfg.role_filter;
+        if (cfg.role_filter) {
+          document.getElementById('role-filter').value = cfg.role_filter;
+          updateRoleButtons(cfg.role_filter);
+        }
         if (cfg.min_fan_level !== undefined) document.getElementById('min-fan-level').value = cfg.min_fan_level;
         if (cfg.fan_announcements_enabled !== undefined) document.getElementById('fan-announce-toggle').checked = cfg.fan_announcements_enabled;
         if (cfg.gift_tts_enabled !== undefined) document.getElementById('gift-tts-toggle').checked = cfg.gift_tts_enabled;
