@@ -40,16 +40,13 @@ import shutil
 import subprocess
 import httpx
 import urllib.request
-from typing import Optional
+from typing import Optional, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import edge_tts
-from TikTokLive import TikTokLiveClient
-from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.9.5"
+CURRENT_VERSION = "1.9.6"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -398,7 +395,7 @@ app.add_middleware(
 class AppState:
     def __init__(self, cfg: dict):
         self.username: str = cfg.get("username", "")
-        self.client: Optional[TikTokLiveClient] = None
+        self.client: Optional[Any] = None
         self.task: Optional[asyncio.Task] = None
         self.status: str = "disconnected"
         self.status_msg: str = "Ready to connect"
@@ -748,6 +745,9 @@ async def tiktok_runner(username: str):
     await broadcast({"type": "status", "status": state.status, "message": state.status_msg})
 
     try:
+        from TikTokLive import TikTokLiveClient
+        from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SubNotifyEvent
+
         client = TikTokLiveClient(unique_id=clean_user)
         # Disable TikTokLive's synchronous teardown to prevent RuntimeError: This event loop is already running
         client._clean_tasks = lambda: None
@@ -886,6 +886,7 @@ async def cloud_tts_worker():
                 "queue_size": state.tts_queue.qsize()
             })
 
+            import edge_tts
             comm = edge_tts.Communicate(text=item["text"], voice=item.get("voice", state.voice))
             audio_buffer = bytearray()
             async for chunk in comm.stream():
@@ -2087,7 +2088,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       <div>
         <div class="brand-title">
           <span>TikTok Live TTS Studio</span>
-          <span class="version-pill" id="app-version">v1.9.5</span>
+          <span class="version-pill" id="app-version">v1.9.6</span>
         </div>
       </div>
     </div>
@@ -2095,7 +2096,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="telemetry-strip">
       <button id="update-pill" class="update-pill" onclick="openUpdateModal()">
         <span class="update-pulse"></span>
-        <span id="update-pill-text">v1.9.5 Ready</span>
+        <span id="update-pill-text">v1.9.6 Ready</span>
       </button>
       <div id="latency-badge" class="telemetry-badge latency">
         <span>⚡ 0ms Offline CPU Engine</span>
@@ -2460,7 +2461,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
           <div>
             <div style="font-size: 14px; font-weight: 700; color: #fff;">TikTok Live TTS Studio</div>
-            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.5</b></div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.6</b></div>
           </div>
           <button class="btn-secondary" style="flex: 0 0 150px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
         </div>
@@ -2494,7 +2495,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
   <footer>
     <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers maintain full moderation responsibility.</span>
-    <span>TikTok Live TTS Studio v1.9.5 • 0ms Local Neural Voice Engine</span>
+    <span>TikTok Live TTS Studio v1.9.6 • 0ms Local Neural Voice Engine</span>
   </footer>
 
   <script>
@@ -3892,9 +3893,12 @@ async def serve_overlay():
 
 def find_available_port(preferred=DEFAULT_PORT):
     for p in range(preferred, preferred + 30):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(('127.0.0.1', p)) != 0:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('127.0.0.1', p))
                 return p
+        except OSError:
+            continue
     return preferred
 
 if __name__ == "__main__":
@@ -3916,7 +3920,24 @@ if __name__ == "__main__":
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
-    time.sleep(1.0)
+    # Fast non-blocking port readiness poll (typically ready in 20-30ms)
+    for _ in range(50):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.05)
+            if s.connect_ex(('127.0.0.1', active_port)) == 0:
+                break
+        time.sleep(0.02)
+
+    # Pre-warm TikTokLive and edge_tts in background so Go Live connects with 0 delay
+    def _prewarm_background():
+        try:
+            from TikTokLive import TikTokLiveClient
+            from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SubNotifyEvent
+            import edge_tts
+        except Exception:
+            pass
+
+    threading.Thread(target=_prewarm_background, daemon=True).start()
 
     try:
         import webview
@@ -3928,7 +3949,8 @@ if __name__ == "__main__":
             url=f"http://127.0.0.1:{active_port}",
             width=1320,
             height=860,
-            min_size=(950, 640)
+            min_size=(950, 640),
+            background_color='#000000'
         )
         webview.start()
     except Exception:

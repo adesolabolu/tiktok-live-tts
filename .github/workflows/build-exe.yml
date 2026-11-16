@@ -57,6 +57,8 @@ jobs:
             --hidden-import webview `
             --hidden-import clr `
             --hidden-import pythonnet `
+            --collect-all TikTokLive `
+            --collect-all edge_tts `
             --copy-metadata uvicorn `
             --add-data "icon.ico;." `
             --add-data "icon.png;." `
