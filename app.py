@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import json
 import multiprocessing
 
@@ -48,7 +49,7 @@ import edge_tts
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent, DisconnectEvent, SubNotifyEvent
 
-CURRENT_VERSION = "1.9.3"
+CURRENT_VERSION = "1.9.4"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -584,21 +585,70 @@ def extract_user_status(target) -> tuple[int, bool, bool]:
 
     return fan_level, is_follower, is_sub
 
+EMOJI_PATTERN = re.compile(
+    '['
+    '\U0001F600-\U0001F64F'  # emoticons
+    '\U0001F300-\U0001F5FF'  # symbols & pictographs
+    '\U0001F680-\U0001F6FF'  # transport & map symbols
+    '\U0001F1E0-\U0001F1FF'  # flags
+    '\U00002702-\U000027B0'  # dingbats
+    '\U000024C2-\U0001F251'  # enclosed chars
+    '\U0001F900-\U0001F9FF'  # supplemental symbols & pictographs
+    '\U0001FA70-\U0001FAFF'  # symbols & pictographs ext-a
+    '\U00002600-\U000026FF'  # misc symbols
+    '\U00002B00-\U00002BFF'  # misc symbols & arrows
+    '\U0000200D'             # zero width joiner
+    '\U0000FE0F'             # variation selector
+    ']+', flags=re.UNICODE
+)
+
+def strip_emojis(text: str) -> str:
+    """Completely remove all unicode emojis from speech string."""
+    if not text:
+        return ""
+    return EMOJI_PATTERN.sub('', text).strip()
+
+def clean_speech_username(raw_name: str) -> str:
+    """
+    Extract clean English alphanumeric characters from user nickname for TTS.
+    Strips decorative symbols, crosses, wings, katakana/kanji glyphs, and emojis.
+    If name has no English letters or is unpronounceable, returns empty string so TTS omits it.
+    """
+    if not raw_name:
+        return ""
+    no_emoji = strip_emojis(raw_name)
+    # Strip special symbols, accents, runes, wingdings: keep only standard a-z, A-Z, 0-9, and spaces
+    clean = re.sub(r'[^a-zA-Z0-9 ]+', '', no_emoji)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    # If fewer than 2 letters, TTS will struggle with weird phonemes or random noise: omit the name
+    letters = re.findall(r'[a-zA-Z]', clean)
+    if len(letters) < 2:
+        return ""
+    return clean
+
 def check_filters(target, text: str) -> tuple[bool, str, int]:
     now = time.time()
     user = getattr(target, 'user', target)
     user_id = getattr(user, 'unique_id', str(getattr(user, 'id', 'user')))
     clean_text = text.strip()
 
-    # 0. Command Prefix Trigger Check (Options: '.', '/', '!')
+    # 0. Emoji-only / No speech text check
+    # Skip totally if comment only contains emojis, punctuation, or no readable alphanumeric words
+    text_without_emojis = strip_emojis(clean_text)
+    if not re.search(r'[a-zA-Z0-9]', text_without_emojis):
+        return False, "Emoji only / no speech text", 0
+
+    # 1. Command Prefix Trigger Check (Options: '.', '/', '!')
     if state.command_prefix and state.command_prefix in [".", "/", "!"]:
         if not clean_text.startswith(state.command_prefix):
             return False, f"Requires prefix '{state.command_prefix}'", 0
         clean_text = clean_text[len(state.command_prefix):].strip()
         if not clean_text:
             return False, "Empty message after prefix", 0
+        if not re.search(r'[a-zA-Z0-9]', strip_emojis(clean_text)):
+            return False, "Emoji only / no speech text", 0
     
-    # 1. Spam Auto-Mute Check (3+ messages in 10s = 30s mute)
+    # 2. Spam Auto-Mute Check (3+ messages in 10s = 30s mute)
     if state.spam_auto_mute:
         mute_until = state.user_muted_until.get(user_id, 0)
         if now < mute_until:
@@ -613,7 +663,7 @@ def check_filters(target, text: str) -> tuple[bool, str, int]:
         history.append(now)
         state.user_msg_history[user_id] = history
 
-    # 2. Fan Club & Role Filter Check
+    # 3. Fan Club & Role Filter Check
     fan_level, is_follower, is_sub = extract_user_status(target)
 
     if state.role_filter == "followers" and not is_follower:
@@ -625,17 +675,17 @@ def check_filters(target, text: str) -> tuple[bool, str, int]:
     if state.min_fan_level > 0 and fan_level < state.min_fan_level:
         return False, f"Requires Fan Lv.{state.min_fan_level} (Viewer is Lv.{fan_level})", fan_level
 
-    # 3. Max length truncate
+    # 4. Max length truncate
     if len(clean_text) > state.max_chars:
         clean_text = clean_text[:state.max_chars]
     
-    # 4. Banned words check
+    # 5. Banned words check
     lower_text = clean_text.lower()
     for word in state.banned_words:
         if word and word.lower() in lower_text:
             return False, f"Blacklisted word: {word}", fan_level
             
-    # 5. Cooldown check
+    # 6. Cooldown check
     last = state.user_last_seen.get(user_id, 0)
     if (now - last) < state.cooldown:
         remaining = int(state.cooldown - (now - last))
@@ -656,6 +706,8 @@ def get_voice_id_from_name(voice_name: str) -> Optional[str]:
     return None
 
 async def handle_new_tts_item(user: str, raw_text: str, display_text: str, fan_level: int = 0):
+    # Ensure raw_text synthesized by any engine has all emojis stripped completely
+    raw_text = strip_emojis(raw_text)
     voice_name = state.native_voice_name or ""
     v_id = get_voice_id_from_name(voice_name)
 
@@ -697,6 +749,8 @@ async def tiktok_runner(username: str):
 
     try:
         client = TikTokLiveClient(unique_id=clean_user)
+        # Disable TikTokLive's synchronous teardown to prevent RuntimeError: This event loop is already running
+        client._clean_tasks = lambda: None
         state.client = client
 
         is_live = await client.is_live()
@@ -728,7 +782,12 @@ async def tiktok_runner(username: str):
             await broadcast({"type": "chat_log", "data": log_item})
 
             if allowed:
-                speech_text = f"{event.user.nickname} says: {result}"
+                clean_name = clean_speech_username(event.user.nickname)
+                speech_comment = strip_emojis(result)
+                if clean_name:
+                    speech_text = f"{clean_name} says: {speech_comment}"
+                else:
+                    speech_text = speech_comment
                 await handle_new_tts_item(event.user.nickname, speech_text, event.comment, fan_level=fan_level)
 
         @client.on(GiftEvent)
@@ -754,7 +813,11 @@ async def tiktok_runner(username: str):
                 await broadcast({"type": "gift_chime"})
 
             if allowed:
-                speech_text = f"Thank you {event.user.nickname} for sending {event.repeat_count} {event.gift.name}!"
+                clean_name = clean_speech_username(event.user.nickname)
+                if clean_name:
+                    speech_text = f"Thank you {clean_name} for sending {event.repeat_count} {event.gift.name}!"
+                else:
+                    speech_text = f"Thank you for sending {event.repeat_count} {event.gift.name}!"
                 await handle_new_tts_item(event.user.nickname, speech_text, f"Sent {event.repeat_count}x {event.gift.name}")
 
         @client.on(SubNotifyEvent)
@@ -775,7 +838,11 @@ async def tiktok_runner(username: str):
             if state.fan_announcements_enabled:
                 if state.gift_sound_enabled:
                     await broadcast({"type": "gift_chime"})
-                speech = f"Welcome {user_name} to the subscriber club!" if months <= 1 else f"Thank you {user_name} for resubscribing for {months} months!"
+                clean_name = clean_speech_username(user_name)
+                if clean_name:
+                    speech = f"Welcome {clean_name} to the subscriber club!" if months <= 1 else f"Thank you {clean_name} for resubscribing for {months} months!"
+                else:
+                    speech = f"Welcome to the subscriber club!" if months <= 1 else f"Thank you for resubscribing for {months} months!"
                 await handle_new_tts_item(user_name, speech, text, fan_level=1)
 
         @client.on(DisconnectEvent)
@@ -784,15 +851,28 @@ async def tiktok_runner(username: str):
             state.status_msg = "Disconnected from livestream."
             await broadcast({"type": "status", "status": state.status, "message": state.status_msg})
 
-        await client.connect()
+        # Start non-blocking connection task
+        task = await client.start(process_connect_events=True)
+        await task
 
     except asyncio.CancelledError:
+        if state.client and state.client.connected:
+            try:
+                await state.client.disconnect()
+            except Exception:
+                pass
         state.status = "disconnected"
         state.status_msg = "Disconnected."
         await broadcast({"type": "status", "status": state.status, "message": state.status_msg})
     except Exception as e:
+        err_msg = str(e)
+        if "UserNotFoundError" in type(e).__name__:
+            err_msg = f"@{clean_user} does not exist or has never gone live."
+        elif "UserOfflineError" in type(e).__name__:
+            err_msg = f"@{clean_user} is currently offline."
         state.status = "error"
-        state.status_msg = f"Error: {str(e)}"
+        state.status_msg = f"Error: {err_msg}"
+        await broadcast({"type": "status", "status": state.status, "message": state.status_msg})
         await broadcast({"type": "status", "status": state.status, "message": state.status_msg})
 
 async def cloud_tts_worker():
@@ -1027,6 +1107,11 @@ exit
 
 @app.post("/api/connect")
 async def api_connect(req: ConnectRequest):
+    if state.client and state.client.connected:
+        try:
+            await state.client.disconnect()
+        except Exception:
+            pass
     if state.task and not state.task.done():
         state.task.cancel()
         try:
@@ -1039,12 +1124,16 @@ async def api_connect(req: ConnectRequest):
 
 @app.post("/api/disconnect")
 async def api_disconnect():
-    if state.task and not state.task.done():
-        state.task.cancel()
     if state.client and state.client.connected:
         try:
             await state.client.disconnect()
         except Exception:
+            pass
+    if state.task and not state.task.done():
+        state.task.cancel()
+        try:
+            await state.task
+        except asyncio.CancelledError:
             pass
     state.status = "disconnected"
     state.status_msg = "Disconnected"
@@ -1998,7 +2087,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       <div>
         <div class="brand-title">
           <span>TikTok Live TTS Studio</span>
-          <span class="version-pill" id="app-version">v1.9.3</span>
+          <span class="version-pill" id="app-version">v1.9.4</span>
         </div>
       </div>
     </div>
@@ -2006,7 +2095,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div class="telemetry-strip">
       <button id="update-pill" class="update-pill" onclick="openUpdateModal()">
         <span class="update-pulse"></span>
-        <span id="update-pill-text">v1.9.3 Ready</span>
+        <span id="update-pill-text">v1.9.4 Ready</span>
       </button>
       <div id="latency-badge" class="telemetry-badge latency">
         <span>⚡ 0ms Offline CPU Engine</span>
@@ -2371,7 +2460,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
           <div>
             <div style="font-size: 14px; font-weight: 700; color: #fff;">TikTok Live TTS Studio</div>
-            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.3</b></div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Installed Engine Version: <b id="settings-version" style="color: var(--accent-cyan);">v1.9.4</b></div>
           </div>
           <button class="btn-secondary" style="flex: 0 0 150px;" onclick="checkForUpdates(true)">🔄 Check for Update</button>
         </div>
@@ -2405,7 +2494,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
   <footer>
     <span>⚖️ Independent open-source tool. Not affiliated with TikTok or ByteDance. Streamers maintain full moderation responsibility.</span>
-    <span>TikTok Live TTS Studio v1.9.3 • 0ms Local Neural Voice Engine</span>
+    <span>TikTok Live TTS Studio v1.9.4 • 0ms Local Neural Voice Engine</span>
   </footer>
 
   <script>
