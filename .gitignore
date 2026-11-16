@@ -35,3 +35,8 @@ Thumbs.db
 bin/
 voices/
 config.json
+
+# Node & Frontend Build
+node_modules/
+site/dist/
+site/node_modules/
