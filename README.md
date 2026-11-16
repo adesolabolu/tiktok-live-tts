@@ -57,6 +57,8 @@ A high-performance, standalone Text-to-Speech (TTS) studio engineered specifical
 
 Download the official standalone installer from the [GitHub Releases](https://github.com/adesolabolu/tiktok-live-tts/releases) page:
 
+> 🛡️ Free code signing provided by the [SignPath Foundation](https://signpath.org).
+
 1. Download **`TikTokLiveTTS-Setup.exe`**.
 2. Double-click to install (no administrator rights required).
 3. Launch **TikTok Live TTS Studio** directly from your Desktop or Start Menu.
@@ -99,3 +101,9 @@ Because TikTok Live TTS Studio plays audio directly through your Windows audio s
 ## 📄 License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+## 🛡️ Code Signing
+
+Free code signing is provided by the [SignPath Foundation](https://signpath.org) to ensure safe, verified, and tamper-proof Windows releases.
