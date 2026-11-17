@@ -80,23 +80,6 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
 
-      - name: Sign Inno Setup Installer with SignPath
-        if: env.SIGNPATH_API_TOKEN != ''
-        env:
-          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
-        shell: powershell
-        run: |
-          Install-Module -Name SignPath -Force -Scope CurrentUser
-          Submit-SigningRequest `
-            -InputArtifactPath "dist/TikTokLiveTTS-Setup.exe" `
-            -ApiToken "$env:SIGNPATH_API_TOKEN" `
-            -OrganizationId "a739baf8-a5e5-47e3-9db8-30c0b0e01f32" `
-            -ProjectSlug "tiktok-live-tts" `
-            -SigningPolicySlug "release-signing" `
-            -OutputArtifactPath "dist/TikTokLiveTTS-Setup.exe" `
-            -WaitForCompletion `
-            -Force
-
       - name: Compress Executable into ZIP
         run: |
           powershell Compress-Archive -Path dist/TikTokLiveTTS -DestinationPath dist/TikTokLiveTTS-Windows.zip
