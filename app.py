@@ -46,7 +46,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-CURRENT_VERSION = "1.9.7"
+CURRENT_VERSION = "1.9.8"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -382,7 +382,7 @@ def save_config(cfg: dict):
 
 initial_cfg = load_config()
 
-app = FastAPI(title="TikTok Live TTS Studio", version=CURRENT_VERSION)
+app = FastAPI(title="TTS Live Studio", version=CURRENT_VERSION)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1314,7 +1314,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TikTok Live TTS Studio</title>
+  <title>TTS Live Studio</title>
   <style>
     :root {
       --bg-canvas: #000000;
@@ -2166,8 +2166,8 @@ HTML_CONTENT = r"""<!DOCTYPE html>
         </svg>
       </div>
       <div class="brand-title">
-        <span>TikTok Live TTS Studio</span>
-        <span class="version-pill" id="app-version">v1.9.7</span>
+        <span>TTS Live Studio</span>
+        <span class="version-pill" id="app-version">v1.9.8</span>
       </div>
     </div>
 
@@ -2580,8 +2580,8 @@ HTML_CONTENT = r"""<!DOCTYPE html>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding: 12px; background: #000; border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
           <div>
-            <div style="font-size: 13px; font-weight: 600; color: #fff;">TikTok Live TTS Studio</div>
-            <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">Installed Version: <b id="settings-version" style="color: var(--accent); font-family: var(--font-mono);">v1.9.7</b></div>
+            <div style="font-size: 13px; font-weight: 600; color: #fff;">TTS Live Studio</div>
+            <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">Installed Version: <b id="settings-version" style="color: var(--accent); font-family: var(--font-mono);">v1.9.8</b></div>
           </div>
           <button class="btn-secondary" onclick="checkForUpdates(true)">Check for Update</button>
         </div>
@@ -2867,7 +2867,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
           }
           if (manual) openUpdateModal();
         } else {
-          if (manual) alert("TikTok Live TTS Studio is up to date (v" + data.current_version + ").");
+          if (manual) alert("TTS Live Studio is up to date (v" + data.current_version + ").");
         }
       } catch (e) {}
     }
@@ -3735,7 +3735,7 @@ OVERLAY_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>TikTok Live TTS Overlay</title>
+  <title>TTS Live Studio Overlay</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -3998,7 +3998,7 @@ if __name__ == "__main__":
         if not os.path.exists(icon_file):
             icon_file = os.path.join(BASE_DIR, "icon.ico")
         window = webview.create_window(
-            title="TikTok Live TTS Studio",
+            title="TTS Live Studio",
             url=f"http://127.0.0.1:{active_port}",
             width=1320,
             height=860,

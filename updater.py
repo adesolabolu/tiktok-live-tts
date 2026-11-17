@@ -106,7 +106,7 @@ def update_worker(pid, source_dir, target_dir, target_exe):
         msg_queue.put(("error", str(e)))
 
 def main():
-    parser = argparse.ArgumentParser(description="TikTok Live TTS Studio Updater")
+    parser = argparse.ArgumentParser(description="TTS Live Studio Updater")
     parser.add_argument("--pid", type=int, default=0, help="PID of previous app to terminate/wait for")
     parser.add_argument("--source", type=str, required=True, help="Extracted source folder")
     parser.add_argument("--target", type=str, required=True, help="Target application folder")
@@ -115,10 +115,10 @@ def main():
     args = parser.parse_args()
 
     root = tk.Tk()
-    root.title("TikTok Live TTS Studio - Update")
+    root.title("TTS Live Studio - Update")
     root.geometry("440x210")
     root.resizable(False, False)
-    root.configure(bg="#0b0f19")
+    root.configure(bg="#000000")
 
     # Center window
     root.update_idletasks()
@@ -139,10 +139,10 @@ def main():
     ver_str = f" to {args.version}" if args.version else ""
     lbl_title = tk.Label(
         root,
-        text=f"🎙️ Updating TikTok Live TTS Studio{ver_str}",
+        text=f"Updating TTS Live Studio{ver_str}",
         font=("Segoe UI", 12, "bold"),
         fg="#f1f5f9",
-        bg="#0b0f19"
+        bg="#000000"
     )
     lbl_title.pack(pady=(24, 6))
 
