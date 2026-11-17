@@ -46,7 +46,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-CURRENT_VERSION = "1.9.8"
+CURRENT_VERSION = "1.9.9"
 GITHUB_REPO = "adesolabolu/tiktok-live-tts"
 DEFAULT_PORT = 28730
 active_port: int = DEFAULT_PORT
@@ -59,12 +59,28 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     BUNDLE_DIR = BASE_DIR
 
-CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
-VOICES_DIR = os.path.join(BASE_DIR, "voices")
+def _resolve_data_dir() -> str:
+    # MSIX installs into read-only WindowsApps; keep user config & voices in LocalAppData.
+    if getattr(sys, "frozen", False) and "WindowsApps" in BASE_DIR:
+        return os.path.join(os.environ.get("LOCALAPPDATA", BASE_DIR), "TTSLiveStudio")
+    try:
+        test_path = os.path.join(BASE_DIR, ".write_test")
+        with open(test_path, "w") as f:
+            f.write("")
+        os.remove(test_path)
+        return BASE_DIR
+    except OSError:
+        return os.path.join(os.environ.get("LOCALAPPDATA", BASE_DIR), "TTSLiveStudio")
+
+DATA_DIR = _resolve_data_dir()
+os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
+VOICES_DIR = os.path.join(DATA_DIR, "voices")
 os.makedirs(VOICES_DIR, exist_ok=True)
 
 def get_piper_executable() -> Optional[str]:
     candidates = [
+        os.path.join(DATA_DIR, "bin", "piper", "piper.exe"),
         os.path.join(BASE_DIR, "bin", "piper", "piper.exe"),
         os.path.join(BUNDLE_DIR, "bin", "piper", "piper.exe"),
         os.path.join(os.path.dirname(sys.executable), "bin", "piper", "piper.exe"),
@@ -80,7 +96,7 @@ def ensure_piper_engine() -> bool:
     exe = get_piper_executable()
     if exe and os.path.exists(exe):
         return True
-    dest_dir = os.path.join(BASE_DIR, "bin", "piper")
+    dest_dir = os.path.join(DATA_DIR, "bin", "piper")
     os.makedirs(dest_dir, exist_ok=True)
     zip_url = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
     try:
@@ -2167,7 +2183,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
       </div>
       <div class="brand-title">
         <span>TTS Live Studio</span>
-        <span class="version-pill" id="app-version">v1.9.8</span>
+        <span class="version-pill" id="app-version">v1.9.9</span>
       </div>
     </div>
 
@@ -2581,7 +2597,7 @@ HTML_CONTENT = r"""<!DOCTYPE html>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding: 12px; background: #000; border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
           <div>
             <div style="font-size: 13px; font-weight: 600; color: #fff;">TTS Live Studio</div>
-            <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">Installed Version: <b id="settings-version" style="color: var(--accent); font-family: var(--font-mono);">v1.9.8</b></div>
+            <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">Installed Version: <b id="settings-version" style="color: var(--accent); font-family: var(--font-mono);">v1.9.9</b></div>
           </div>
           <button class="btn-secondary" onclick="checkForUpdates(true)">Check for Update</button>
         </div>

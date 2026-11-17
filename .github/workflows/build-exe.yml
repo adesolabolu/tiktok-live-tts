@@ -84,6 +84,23 @@ jobs:
         run: |
           powershell Compress-Archive -Path dist/TikTokLiveTTS -DestinationPath dist/TikTokLiveTTS-Windows.zip
 
+      - name: Build Microsoft Store MSIX Package (TTSLiveStudio.msix)
+        shell: powershell
+        run: |
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "makeappx.exe" |
+            Where-Object { $_.FullName -match "\\x64\\" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $makeappx) { throw "makeappx.exe not found in Windows SDK" }
+          $msixDir = "dist/msix_stage"
+          if (Test-Path $msixDir) { Remove-Item $msixDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $msixDir | Out-Null
+          Copy-Item "dist/TikTokLiveTTS/*" $msixDir -Recurse -Force
+          Copy-Item "bin/piper" "$msixDir/bin/piper" -Recurse -Force
+          Copy-Item "msix/Assets" "$msixDir/Assets" -Recurse -Force
+          Copy-Item "msix/AppxManifest.xml" "$msixDir/AppxManifest.xml" -Force
+          & $makeappx pack /d $msixDir /p "dist/TTSLiveStudio.msix" /o
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -91,6 +108,7 @@ jobs:
           path: |
             dist/TikTokLiveTTS-Setup.exe
             dist/TikTokLiveTTS-Windows.zip
+            dist/TTSLiveStudio.msix
 
       - name: Release Executable on Tag
         if: startsWith(github.ref, 'refs/tags/v')
@@ -99,6 +117,7 @@ jobs:
           files: |
             dist/TikTokLiveTTS-Setup.exe
             dist/TikTokLiveTTS-Windows.zip
+            dist/TTSLiveStudio.msix
           draft: false
           prerelease: false
           generate_release_notes: true
